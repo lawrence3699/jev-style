@@ -238,6 +238,6 @@ uv run jev-style serve --fake   # UI work without the model
 
 ## Acknowledgements and License
 
-Code: Apache-2.0 ([LICENSE](LICENSE)). The weights are Apache-2.0 fine-tunes of [Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B); the NOTICE in each model repository lists the changes. The typed-question convention follows [Laya](https://github.com/NandhaKishorM/laya), and the idea of a local model you point existing systemone clients at is shared with [Kev](https://github.com/jaredpalmer/kev). Kev covers training your own models; Jev-Style covers running a ready-made one inside your agents.
+Code: Apache-2.0 ([LICENSE](LICENSE)). The weights are Apache-2.0 fine-tunes of [Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B); the NOTICE in each model repository lists the changes. The typed-question convention follows [Laya](https://github.com/NandhaKishorM/laya).
 
-Not affiliated with, endorsed by or connected to TypeSafe or Jev. "Jev-Style" describes the kind of model: a small typed-decision model in a similar style. No Jev weights, code or outputs are included. Not affiliated with Alibaba Cloud or the Qwen team, the Laya authors or the Kev authors.
+Not affiliated with, endorsed by or connected to TypeSafe or Jev. "Jev-Style" describes the kind of model: a small typed-decision model in a similar style. No Jev weights, code or outputs are included. Not affiliated with Alibaba Cloud or the Qwen team or the Laya authors.
