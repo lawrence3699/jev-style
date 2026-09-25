@@ -130,4 +130,6 @@ def build_adapter(backend: str = "auto", *, fake: bool = False, **load_kw: Any) 
     from .models import load
     worker = model_thread()
     runtime, rt, name = worker.submit(load, backend, **load_kw).result()
+    from .fastpath import enable_prefix_sharing
+    enable_prefix_sharing(runtime, rt)          # MLX: read the state once for many questions (same scores)
     return Adapter(runtime, rt, name, worker=worker)
