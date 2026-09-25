@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-zh="Jev-Style v3 试用">Jev-Style v3 Playground</title>
+<meta name="description" content="Ask Jev-Style 0.8B Decision v3 yes/no, choice and score questions about any text, locally.">
+<link rel="stylesheet" href="/common.css">
+<link rel="stylesheet" href="/playground/playground.css">
+<script src="/common.js" defer></script>
+<script src="/playground/share.js" defer></script>
+<script src="/playground/playground.js" defer></script>
+</head>
+<body>
+<main class="pg">
+  <div class="pg-top">
+    <h1><span lang="en">Playground</span><span lang="zh">试用</span></h1>
+    <div class="pg-actions">
+      <select id="preset" class="mj-select" data-aria-label-en="Example" data-aria-label-zh="示例"></select>
+      <input id="apikey" class="mj-input" type="password" hidden autocomplete="off"
+             data-placeholder-en="API key" data-placeholder-zh="API 密钥">
+      <button id="share" class="mj-btn" type="button"><span lang="en">Share</span><span lang="zh">分享</span></button>
+      <button id="run" class="mj-btn primary" type="button"><span lang="en">Run</span><span lang="zh">运行</span>
+        <kbd class="pg-kbd">⌘↵</kbd></button>
+    </div>
+  </div>
+  <div id="sharebox" class="pg-sharebox" hidden>
+    <input id="shareurl" class="mj-input" readonly data-aria-label-en="Share link" data-aria-label-zh="分享链接">
+    <span id="sharemsg" class="mj-small mj-muted"></span>
+  </div>
+
+  <div class="pg-grid">
+    <section class="pg-in">
+      <div class="mj-card">
+        <div class="pg-head">
+          <h2><span lang="en">State</span><span lang="zh">状态</span></h2>
+          <div class="mj-seg" id="statemode" role="group">
+            <button type="button" data-mode="text"><span lang="en">Text</span><span lang="zh">文本</span></button><button type="button" data-mode="json">JSON</button>
+          </div>
+        </div>
+        <textarea id="state" class="mj-textarea" rows="9" spellcheck="false"
+                  data-placeholder-en="Paste any text, or a JSON object" data-placeholder-zh="粘贴任意文本或 JSON 对象"></textarea>
+        <div id="stateerr" class="mj-small mj-err" hidden></div>
+      </div>
+
+      <div class="mj-card">
+        <div class="pg-head">
+          <h2><span lang="en">Questions</span><span lang="zh">问题</span></h2>
+          <div class="mj-seg" id="qmode" role="group">
+            <button type="button" data-mode="form"><span lang="en">Form</span><span lang="zh">表单</span></button><button type="button" data-mode="json">JSON</button>
+          </div>
+        </div>
+        <div id="qform"></div>
+        <div id="qjsonwrap" hidden>
+          <textarea id="qjson" class="mj-textarea" rows="16" spellcheck="false"></textarea>
+          <div id="qjsonerr" class="mj-small mj-err" hidden></div>
+        </div>
+        <div class="mj-row pg-add" id="qadd">
+          <span class="mj-small mj-muted"><span lang="en">Add</span><span lang="zh">添加</span></span>
+          <button type="button" class="mj-btn" data-add="noul"><span lang="en">Yes / no</span><span lang="zh">是非</span></button>
+          <button type="button" class="mj-btn" data-add="choice"><span lang="en">Choice</span><span lang="zh">选择</span></button>
+          <button type="button" class="mj-btn" data-add="score"><span lang="en">Score</span><span lang="zh">打分</span></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="pg-out" aria-live="polite">
+      <div class="mj-card pg-metrics" id="metrics">
+        <div><span class="k"><span lang="en">Total</span><span lang="zh">总耗时</span></span><span class="v" id="m-total">–</span></div>
+        <div><span class="k"><span lang="en">Read state</span><span lang="zh">读状态</span></span><span class="v" id="m-prefix">–</span></div>
+        <div><span class="k"><span lang="en">Input tokens</span><span lang="zh">输入 token</span></span><span class="v" id="m-tokens">–</span></div>
+        <div><span class="k"><span lang="en">Cost</span><span lang="zh">费用</span></span><span class="v">$0<small class="mj-muted"> <span lang="en">local</span><span lang="zh">本地</span></small></span></div>
+        <div class="wide"><span class="k"><span lang="en">Model</span><span lang="zh">模型</span></span><span class="v" id="m-model">–</span></div>
+      </div>
+
+      <div id="error" class="mj-card pg-error" hidden></div>
+      <div id="answers" class="pg-answers">
+        <div class="mj-card mj-muted pg-empty"><span lang="en">Run to see answers.</span><span lang="zh">点“运行”查看结果。</span></div>
+      </div>
+
+      <div class="mj-card" id="gate">
+        <div class="pg-head">
+          <h2><span lang="en">Gate</span><span lang="zh">门控</span></h2>
+          <div class="mj-seg" id="gatemode" role="group">
+            <button type="button" data-mode="conf"><span lang="en">Confidence</span><span lang="zh">置信度</span></button><button type="button" data-mode="band"><span lang="en">Yes band</span><span lang="zh">是非区间</span></button>
+          </div>
+        </div>
+        <div class="pg-sliders" id="gatesliders"></div>
+        <div class="pg-gatesum" id="gatesum"></div>
+        <div class="pg-head pg-codehead">
+          <span class="mj-small mj-muted"><span lang="en">This code decides each tier</span><span lang="zh">由这段代码决定每个问题的去向</span></span>
+          <div class="mj-seg" id="gatelang" role="group">
+            <button type="button" data-mode="js">JS</button><button type="button" data-mode="py">Python</button>
+          </div>
+        </div>
+        <pre id="gatecode"></pre>
+      </div>
+
+      <div class="mj-card">
+        <div class="pg-head">
+          <h2><span lang="en">Raw</span><span lang="zh">原始数据</span></h2>
+          <div class="mj-seg" id="rawmode" role="group">
+            <button type="button" data-mode="req"><span lang="en">Request</span><span lang="zh">请求</span></button><button type="button" data-mode="res"><span lang="en">Response</span><span lang="zh">响应</span></button><button type="button" data-mode="curl">curl</button><button type="button" data-mode="py">Python</button>
+          </div>
+        </div>
+        <pre id="raw" class="pg-raw"></pre>
+        <div class="mj-row"><button type="button" class="mj-btn" id="copyraw"><span lang="en">Copy</span><span lang="zh">复制</span></button>
+          <span class="mj-small mj-muted" id="rawnote"></span></div>
+      </div>
+    </section>
+  </div>
+  <p class="mj-small mj-muted pg-foot" id="presetsrc"></p>
+</main>
+</body>
+</html>

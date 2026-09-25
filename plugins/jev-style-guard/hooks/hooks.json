@@ -1,0 +1,17 @@
+{
+  "description": "Jev-Style guard: checks tool calls with the local Jev-Style server before they run.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|Read|WebFetch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "J=$(command -v jev-style || echo \"$HOME/.local/bin/jev-style\"); \"$J\" guard || printf '%s\\n' '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"Jev-Style guard could not start (is the jev-style CLI installed?); asking instead.\"}}'",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}

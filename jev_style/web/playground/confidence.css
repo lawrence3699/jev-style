@@ -1,0 +1,31 @@
+/* Confidence Explorer layout. */
+main.cx { max-width: 1080px; }
+.mono { font-family: var(--mono); }
+.cx-lead { max-width: 60em; margin: 0 0 14px; }
+.cx-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 14px; align-items: start; }
+.cx-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.cx-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.cx-presets .mj-btn { font-size: 13px; padding: 3px 10px; }
+.cx-sliders { display: flex; flex-direction: column; gap: 10px; }
+.cx-slider { display: grid; grid-template-columns: 1.6em 1fr 4.2em; gap: 10px; align-items: center; }
+.cx-slider input { width: 100%; accent-color: var(--accent); }
+.cx-name { font-weight: 700; }
+.cx-val { text-align: right; font-size: 13px; }
+.cx-result { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+.cx-big { font-size: 22px; font-weight: 700; }
+.cx-formula { font-size: 12.5px; margin: 0 0 10px; white-space: pre; }
+.cx-plot { width: 100%; max-width: 460px; height: auto; display: block; margin: 0 auto; }
+.cx-plot .cx-grid { stroke: var(--line); stroke-width: 1; }
+.cx-plot .cx-tick { fill: var(--muted); font: 10px var(--mono); }
+.cx-plot .cx-klab { fill: var(--muted); font: 9px var(--mono); opacity: .8; }
+.cx-plot .cx-klab.on { fill: var(--fg); font-weight: 700; opacity: 1; }
+.cx-plot .cx-line { stroke: var(--muted); stroke-width: 1; opacity: .45; }
+.cx-plot .cx-line.on { stroke: var(--bar); stroke-width: 2.5; opacity: 1; }
+.cx-plot .cx-drop { stroke: var(--bar); stroke-dasharray: 3 3; opacity: .6; }
+.cx-plot .cx-dot { fill: var(--bar); stroke: var(--card); stroke-width: 2; }
+@media (max-width: 820px) { .cx-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) {
+  .cx-result { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cx-presets { margin-left: 0; }
+  .cx-formula { font-size: 11.5px; }
+}

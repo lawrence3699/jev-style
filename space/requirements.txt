@@ -1,0 +1,8 @@
+# Gradio is installed by the Space from README.md (sdk_version). Tested locally with these versions
+# (Apple MPS, float32); torch 2.13.0 is within the versions ZeroGPU supports.
+torch==2.13.0
+transformers==5.17.0
+tokenizers==0.23.2
+numpy==2.5.3
+huggingface_hub==1.32.0
+spaces

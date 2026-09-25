@@ -1,0 +1,9 @@
+{
+  "slug": "chinese",
+  "title_en": "Chinese & 51 languages",
+  "title_zh": "中文与多语言",
+  "summary_en": "Chinese customer-service triage and inbox sorting, plus one intent question asked in 51 languages.",
+  "summary_zh": "中文客服分诊和邮件分拣，再加同一个意图问题在 51 种语言里的表现。",
+  "order": 55,
+  "entry": "index.html"
+}

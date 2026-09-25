@@ -1,0 +1,23 @@
+{
+ "slug": "chinese",
+ "built_by": "scripts/demos/build_chinese.py",
+ "files": {
+  "massive_dev_subset.json": {
+   "source_url": "https://amazon-massive-nlu-dataset.s3.amazonaws.com/amazon-massive-dataset-1.1.tar.gz",
+   "source_archive": "data/public_raw/massive-1.1/official-1.1.tar.gz",
+   "source_archive_sha256": "4cba5faa11c71437928e17cb1b9b3d8b8e727e7ea363a3a9a8045e19c0491577",
+   "partition": "dev",
+   "licence": "CC BY 4.0 (Copyright Amazon.com Inc. or its affiliates; includes SLURP text, CC BY 4.0)",
+   "sha256": "2efa8f98a4000de616b775ff40d7ad9ac1a43cdd39cc8544381ad71d6cb60b82",
+   "bytes": 154106,
+   "items": 40,
+   "locales": 52
+  },
+  "jev_style/web/demos/chinese/cases.json": {
+   "source": "data/master-v3/raw/theme_triage/{dev,cal}.jsonl (lang zh; project-generated synthetic tickets)",
+   "licence": "project-generated synthetic text (teacher models; no third-party text)",
+   "sha256": "a3196aeb1166bde542298dfac0bd584b97d1490f195e663669da087c37a5dfa5",
+   "bytes": 22319
+  }
+ }
+}

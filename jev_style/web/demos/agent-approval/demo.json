@@ -1,0 +1,9 @@
+{
+  "slug": "agent-approval",
+  "title_en": "Agent action approval",
+  "title_zh": "Agent 操作审批",
+  "summary_en": "A coding agent's tool calls, checked one by one before they run: hard rules in code, then Jev-Style v3 answers four questions and the answers set allow / ask / deny. Same code as the Claude Code guard hook; commands are never run.",
+  "summary_zh": "编程 Agent 的工具调用在运行前逐条检查：代码先查硬规则，Jev-Style v3 回答四个问题，答案决定允许 / 询问 / 拒绝。与 Claude Code 守门 hook 同一套代码；命令从不执行。",
+  "order": 1,
+  "entry": "index.html"
+}

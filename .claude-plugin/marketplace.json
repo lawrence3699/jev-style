@@ -1,0 +1,19 @@
+{
+  "name": "jev-style",
+  "owner": {"name": "chaoliangUNSW", "url": "https://github.com/lawrence3699"},
+  "metadata": {"description": "Small, calibrated, local decision models: skills, MCP tools and a PreToolUse guard for Claude Code.", "version": "0.1.0"},
+  "plugins": [
+    {
+      "name": "jev-style",
+      "source": "./",
+      "description": "Skills (serve, use, eval, adopt, guard, mcp) and MCP tools (decide, noul, choice, score) for the local Jev-Style decision model. Needs `jev-style serve` running.",
+      "version": "0.1.0"
+    },
+    {
+      "name": "jev-style-guard",
+      "source": "./plugins/jev-style-guard",
+      "description": "PreToolUse hook: the local Jev-Style model checks Bash/Write/Edit/Read/WebFetch/MCP calls and answers allow / ask / deny. Fails safe to ask.",
+      "version": "0.1.0"
+    }
+  ]
+}

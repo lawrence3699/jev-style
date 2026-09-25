@@ -1,0 +1,391 @@
+{
+ "source": "data/master-v3/raw/theme_triage/{dev,cal}.jsonl (lang zh; project-generated synthetic tickets)",
+ "queue_zh": {
+  "Technical Support": "技术支持",
+  "Product Support": "产品使用",
+  "Customer Service": "客户服务",
+  "IT Support": "内部 IT",
+  "Billing and Payments": "账单与付款",
+  "Returns and Exchanges": "退换货",
+  "Service Outages and Maintenance": "故障与维护",
+  "Sales and Pre-Sales": "销售与售前",
+  "Human Resources": "人力资源",
+  "General Inquiry": "一般咨询"
+ },
+ "folders": {
+  "技术问题": "故障、报错、网络、账号登录、系统或设备无法使用",
+  "账单付款": "发票、扣费、退款到账、付款方式",
+  "退换货": "退货、换货、商品寄回",
+  "销售线索": "询价、报价、采购意向、试用",
+  "人事": "招聘、薪资、请假、入职离职",
+  "客服咨询": "其他产品使用问题、账户服务和一般咨询"
+ },
+ "queue_to_folder": {
+  "Technical Support": "技术问题",
+  "IT Support": "技术问题",
+  "Service Outages and Maintenance": "技术问题",
+  "Billing and Payments": "账单付款",
+  "Returns and Exchanges": "退换货",
+  "Sales and Pre-Sales": "销售线索",
+  "Human Resources": "人事",
+  "Product Support": "客服咨询",
+  "Customer Service": "客服咨询",
+  "General Inquiry": "客服咨询"
+ },
+ "triage": {
+  "questions": {
+   "queue": {
+    "type": "choice",
+    "instructions": "Which support queue should handle this ticket?",
+    "criteria": {
+     "Technical Support": "technical problems, bugs, outages, integrations",
+     "Product Support": "help using a product or feature",
+     "Customer Service": "general account or service questions",
+     "IT Support": "internal IT, devices, access, networks",
+     "Billing and Payments": "invoices, charges, refunds, payment methods",
+     "Returns and Exchanges": "returning or exchanging an item",
+     "Service Outages and Maintenance": "downtime, outages, scheduled maintenance",
+     "Sales and Pre-Sales": "pricing, quotes, buying",
+     "Human Resources": "employment, payroll, leave, hiring",
+     "General Inquiry": "anything else"
+    }
+   },
+   "urgency": {
+    "type": "score",
+    "instructions": "这张工单有多紧急？",
+    "criteria": [
+     "低：可以排队处理",
+     "中：今天内处理",
+     "高：需要尽快处理",
+     "紧急：业务中断或有安全风险"
+    ]
+   },
+   "mood": {
+    "type": "score",
+    "instructions": "客户现在的情绪如何？",
+    "criteria": [
+     "平静",
+     "有些不满",
+     "非常不满"
+    ]
+   },
+   "human": {
+    "type": "noul",
+    "instructions": "这张工单是否需要人工客服跟进，而不能只靠自动回复解决？"
+   },
+   "refund": {
+    "type": "noul",
+    "instructions": "客户是否在要求退款、赔偿或减免费用？"
+   }
+  },
+  "gold_note": "gold = pool label for `queue` only",
+  "cases": [
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-07652:1b031f23d8",
+    "split": "dev",
+    "license": "generated:claude-opus-5.5",
+    "state": {
+     "subject": "",
+     "body": "访客：你好，我上周在你们展厅看了一台SUV，还没决定买，销售顾问让我先交2000元意向金，说可以锁定优惠。我是用手机扫码付的。\n访客：结果今天看银行流水，扣了我两次2000！一共4000！我只扫了一次码啊。\n访客：我打电话给那位销售，他说他不管财务，让我找你们线上客服。我现在很生气，钱被多扣了，车还没定下来，你们这样我怎么放心买车？\n访客：付款时间是昨天下午三点多，收款方显示的是你们集团的名字。请尽快把多扣的2000元退给我，并告诉我意向金如果最后不买能不能全额退。\n访客：我等你们回复，别再让我转来转去了。"
+    },
+    "gold_queue": "Billing and Payments",
+    "difficulty": "clear",
+    "channel": "live-chat transcript excerpt"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-06712:80236a7e0e",
+    "split": "dev",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "咨询企业寄件开户流程",
+     "body": "来电人准备开一家网店，想了解企业寄件账户如何申请，需要营业执照还是个人证件，以及审核通常要几天。尚未注册账号，也没有包裹要查询，不清楚应从直营网点还是官网开始办理。"
+    },
+    "gold_queue": "Customer Service",
+    "difficulty": "clear",
+    "channel": "note taken by an agent during a phone call"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-05680:4b6d8282fc",
+    "split": "dev",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "资料归档期限",
+     "body": "想咨询一下，我们医院信息部门最近在整理历史项目资料，里面既有系统上线记录，也有供应商培训材料和一些已经停用的操作手册。审计同事只说要按规定保存，但没有说明不同类型分别需要留几年。我在内网知识库里找到了病历数据的保存要求，可这些资料并不属于病历。请问医院目前有没有统一的文档保留政策，或者可以提供负责这类合规咨询的部门和联系方式？另外，纸质签字验收单扫描后，原件是否仍需保留也请一并说明。"
+    },
+    "gold_queue": "General Inquiry",
+    "difficulty": "clear",
+    "channel": "web contact form"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-01350:2c228f8884",
+    "split": "dev",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "绩效奖金未计入工资",
+     "body": "本月工资已经到账，但去年第四季度的绩效奖金没有包含在工资单中。部门负责人确认我的考核结果和奖金审批均已完成，财务只收到普通工资数据。请人事薪酬团队检查员工记录、奖金批次和发放日期，并告知是否会安排补发。我问的不是客户账单或软件订阅费用，而是员工薪酬。员工编号SA-1847。"
+    },
+    "gold_queue": "Human Resources",
+    "difficulty": "clear",
+    "channel": "live-chat transcript excerpt"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-02627:d93ce1dc34",
+    "split": "dev",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "办公室电脑和共享盘无法访问",
+     "body": "电话记录：理赔部员工说早上到公司后，自己的电脑先是登录特别慢，后来桌面出来了，但共享盘打不开，打印机也显示离线。他一开始以为整个办公室都断网，因为茶水间那台电脑也很慢，不过问了几位同事后发现他们都能正常工作。员工昨晚把笔记本带回家连接过家用网络，今天插回扩展坞后就出现问题。他已经重启两次，还拔插了网线，现在浏览器偶尔能打开外部网页，但内部文件夹仍提示无权限。请检查这台设备的网络配置、域账号和共享盘映射，不像是全公司服务中断。"
+    },
+    "gold_queue": "IT Support",
+    "difficulty": "clear",
+    "channel": "note taken by an agent during a phone call"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-03907:664af2fb38",
+    "split": "cal",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "不会设置广告受众排除条件",
+     "body": "我购买了你们的个人营销工具，但“受众规则”页面让我很困惑。我想向访问过商品页、却没有完成购买的人展示广告，同时排除过去三十天已经下单的客户。界面里有“包含任一条件”“包含全部条件”和“排除分组”，我不知道购买事件应该放在哪里，也不确定时间窗口是按自然日还是滚动天数计算。请用简单的步骤说明如何创建这个受众、检查预计人数并保存为模板。服务可以正常打开，我不是要咨询更高套餐或报价，只需要学会使用现有功能。"
+    },
+    "gold_queue": "Product Support",
+    "difficulty": "clear",
+    "channel": "web contact form"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-03404:71a9d79fa2",
+    "split": "dev",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "紧急退换设备",
+     "body": "我昨天收到车险公司寄来的行车记录器，拆箱后发现外壳破裂，电源接口也歪了，根本不敢安装。保单下周就要生效，请尽快安排换货；若无法及时寄出完好设备，请直接办理退货并告知寄回地址。"
+    },
+    "gold_queue": "Returns and Exchanges",
+    "difficulty": "clear",
+    "channel": "web contact form"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-00241:79c466c96f",
+    "split": "cal",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "团体销售方案",
+     "body": "我是酒店集团负责渠道合作的员工。我们已经问了三次，至今没人明确说明新推出的企业团体销售方案怎么购买。我们需要给十二家分店统一开通，让前台能够向协议客户销售早餐、延迟退房和会议室套餐。请直接提供按门店还是按账号计费、最低采购数量、合同期限、批量折扣以及上线时间。产品页面只介绍功能，没有报价，也没有说明能否先安排演示。下周一就要做预算审批，请尽快让销售人员联系我，不要再发通用帮助文档。"
+    },
+    "gold_queue": "Sales and Pre-Sales",
+    "difficulty": "clear",
+    "channel": "live-chat transcript excerpt"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-01170:81e43e6846",
+    "split": "cal",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "校园门户似乎停机",
+     "body": "我经营一家给学校食堂供货的小公司，平时每周四在大学供应商门户上传送货单。今天从早上八点多到现在，登录页面一直显示“系统维护中，预计恢复时间待定”。起初我以为是自己的网络问题，还特地去了隔壁办公室，用手机流量和另一台电脑试过，结果都一样。学校采购联系人说他们内部也打不开。请确认是否正在统一维护、大概何时恢复，以及今天截止的单据会不会顺延。"
+    },
+    "gold_queue": "Service Outages and Maintenance",
+    "difficulty": "clear",
+    "channel": "web contact form"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-00836:65cd68e76e",
+    "split": "dev",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "理赔页面上传后总报错",
+     "body": "聊天记录：我已经填完车险理赔资料，但上传维修报价单后，页面每次都提示“文件处理失败”，然后把刚填的事故说明清空。我试过 PDF 和照片，文件都小于页面规定的大小，也换过手机和家里的电脑。其他网站使用正常，所以别再让我重启路由器了。事故发生已经五天，维修厂在等理赔编号。请检查提交接口，把草稿恢复，或者提供不会丢失内容的上传方式。"
+    },
+    "gold_queue": "Technical Support",
+    "difficulty": "clear",
+    "channel": "live-chat transcript excerpt"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-02049:9ffe03dfc5",
+    "split": "cal",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "发票与重复扣款",
+     "body": "您好，我司培训平台企业账户<acc_num>本月续费后，付款记录中出现了两笔金额相同的扣款，但管理员后台只显示一张发票。两笔交易的日期相隔一天，银行卡尾号及付款主体均一致，我们财务部门目前无法判断第二笔是重复收取、临时预授权，还是上一周期的补扣。烦请核对两笔款项的实际入账状态，并在确认重复收费后将多收金额原路退回。另请为有效的年度订阅开具抬头和税号正确的增值税发票，发送至<email>。我们暂时不需要新增账号或重新询价，现有席位数量保持不变。因月底即将关账，如还需要银行流水截图、交易参考号或付款证明，请通过<tel_num>联系我，我会立即补充。感谢协助，并请告知退款及发票处理的大致时限。"
+    },
+    "gold_queue": "Billing and Payments",
+    "difficulty": "clear",
+    "channel": "web contact form"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-02072:f2923f1d70",
+    "split": "cal",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "",
+     "body": "来电人计划下周首次到市政服务中心办理小型餐饮摊位许可，表示网站说明不够清楚，且开业日期临近，希望尽快确认。其询问是否必须本人到场、需要携带哪些身份证明和场地文件，以及没有本市固定住址能否申请。来电人还看到页面列出申请费，但本次主要不是反映扣款问题，而是想确认办理资格、预约方式及材料清单。请相关服务人员今天回电，避免其预约错误或遗漏材料。"
+    },
+    "gold_queue": "Customer Service",
+    "difficulty": "clear",
+    "channel": "note taken by an agent during a phone call"
+   }
+  ]
+ },
+ "email": {
+  "questions": {
+   "folder": {
+    "type": "choice",
+    "instructions": "这封邮件应该放进哪个文件夹？",
+    "criteria": {
+     "技术问题": "故障、报错、网络、账号登录、系统或设备无法使用",
+     "账单付款": "发票、扣费、退款到账、付款方式",
+     "退换货": "退货、换货、商品寄回",
+     "销售线索": "询价、报价、采购意向、试用",
+     "人事": "招聘、薪资、请假、入职离职",
+     "客服咨询": "其他产品使用问题、账户服务和一般咨询"
+    }
+   },
+   "reply_today": {
+    "type": "noul",
+    "instructions": "这封邮件是否需要今天回复？"
+   },
+   "priority": {
+    "type": "score",
+    "instructions": "这封邮件的处理优先级是多少？",
+    "criteria": [
+     "低",
+     "中",
+     "高"
+    ]
+   }
+  },
+  "gold_note": "gold folder is mapped from the pool's queue label (queue_to_folder)",
+  "cases": [
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-00302:65d0e7c37f",
+    "split": "dev",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "想了解旧设备资料保存规定",
+     "body": "我们是贵公司的区域经销商，最近仓库里整理出一批多年前停产的工业控制器。终端客户问这些设备的说明书、合格证和维修记录通常需要保存多少年，我在网站上只找到新型号的资料，也不确定经销商是否有法定销毁要求。我们目前不是要购买替代设备，也没有设备故障或订单问题。能否告知贵公司对历史产品文件的保存建议，以及旧版说明书可以从哪里申请？如果不同地区规定不同，也请说明应该向哪个部门或机构查询。"
+    },
+    "gold_queue": "General Inquiry",
+    "difficulty": "clear",
+    "channel": "email",
+    "gold_folder": "客服咨询"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-03866:a721a51b3f",
+    "split": "dev",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "课程平台长时间无法访问且无维护通知",
+     "body": "从今天下午三点左右开始，我和同班同学都无法进入学习平台，网页一直显示“服务暂时不可用”，手机应用也停在加载界面。我们分别使用了校园网络和手机流量，结果完全一样，所以应该不是个人设备或网络问题。今晚十一点前要提交小组作业，现在连课程页面和已保存的草稿都打不开。状态页面最初显示一切正常，后来又出现“正在调查”的提示，但没有预计恢复时间。我理解系统偶尔需要维护，可这次没有提前收到任何通知。请确认当前是否发生了服务中断、受影响的范围以及预计恢复时间，并说明作业截止时间是否会统一顺延。"
+    },
+    "gold_queue": "Service Outages and Maintenance",
+    "difficulty": "clear",
+    "channel": "email",
+    "gold_folder": "技术问题"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-07128:df77e743c4",
+    "split": "dev",
+    "license": "generated:claude-opus-5.5",
+    "state": {
+     "subject": "客户定金退款未到账",
+     "body": "财务部各位同事：\n\n您好！客户刘先生于 9 月 2 日取消订车，定金 5,000 元退款申请已于 9 月 5 日审批通过，至今未到账，客户多次来电询问。烦请协助查询进度。\n\n销售一部 许婷"
+    },
+    "gold_queue": "Billing and Payments",
+    "difficulty": "clear",
+    "channel": "email",
+    "gold_folder": "账单付款"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-05442:2b3f8ed956",
+    "split": "dev",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "急需换货",
+     "body": "我们昨天收到用于产线试装的VX-40变频控制器，通电后面板持续显示E17，按照手册重新接线并恢复出厂设置仍然无法进入调试界面。项目验收就在本周五，我们没有时间继续排查。外箱完整，但设备侧面的封条到货时已有轻微翘起，序列号也与装箱单最后两位不一致。请立即为这台设备办理换货，并安排加急寄出同型号新品；故障品的取件标签也请一并提供。若无法保证周四前送达，请告知是否可以先用兼容型号替换。"
+    },
+    "gold_queue": "Returns and Exchanges",
+    "difficulty": "borderline",
+    "channel": "email",
+    "gold_folder": "退换货"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-04137:1eb837634c",
+    "split": "cal",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "客户报价迟迟未出",
+     "body": "我是项目交付团队的陈昕，上周已提交华东客户所需的云迁移咨询方案，请销售尽快提供三年期正式报价和折扣审批结果。客户明早开预算会，系统里却仍显示待处理，别再只发旧版价目表。"
+    },
+    "gold_queue": "Sales and Pre-Sales",
+    "difficulty": "clear",
+    "channel": "email",
+    "gold_folder": "销售线索"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-04356:329b194cc3",
+    "split": "cal",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "急询停气公告发布渠道",
+     "body": "我们是社区服务合作单位，刚收到一位居民转来的停气消息，但官网公告栏尚未看到相关通知。请尽快确认贵司通常通过哪些官方渠道发布临时停气、预计恢复时间和受影响街区信息，以及合作机构能否订阅短信或邮件提醒。"
+    },
+    "gold_queue": "General Inquiry",
+    "difficulty": "clear",
+    "channel": "email",
+    "gold_folder": "客服咨询"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-01712:57bdf66e09",
+    "split": "cal",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "生产监控接口持续返回认证错误",
+     "body": "您好，工厂生产监控系统从今天10时起调用设备数据接口时持续返回401错误，重新生成令牌后仍无法恢复。其他内部系统正常，烦请检查接口认证服务及今晨发布的配置变更。"
+    },
+    "gold_queue": "Technical Support",
+    "difficulty": "clear",
+    "channel": "email",
+    "gold_folder": "技术问题"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-07659:11c36dba6f",
+    "split": "cal",
+    "license": "generated:claude-opus-5.5",
+    "state": {
+     "subject": "会员积分抵扣未生效",
+     "body": "你好，我是你们药房的老会员了，差不多有五六年了吧，平时给家里老人买药都在你们家。上周六我在人民路那家店买了降压药和一些维生素，一共368元，收银员说我的积分可以抵扣30元，结果小票上显示抵扣了，但是我刚看手机银行，扣款还是368元整。收银员当时也挺忙的，我就没仔细看。积分在APP里也确实被扣掉了。麻烦帮我查一下，要么把30元退给我，要么把积分还给我。小票照片我可以补发。"
+    },
+    "gold_queue": "Billing and Payments",
+    "difficulty": "clear",
+    "channel": "email",
+    "gold_folder": "账单付款"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-05497:1f0d74382d",
+    "split": "dev",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "门店错收商品换货",
+     "body": "我是门店员工，昨天收货时发现配送箱里的六台血压计型号不对。系统采购单是BP-Home 3，实际收到的是BP-Home 2，外包装完整，也还没有上架。我不确定是应该先在库存系统做差异登记，还是直接申请换货。请提供退回标签并补发正确型号；如果需要拍批次号或联系采购部门，也请告诉我具体步骤。门店账号是<acc_num>，相关配送单为<order_id>。"
+    },
+    "gold_queue": "Returns and Exchanges",
+    "difficulty": "borderline",
+    "channel": "email",
+    "gold_folder": "退换货"
+   },
+   {
+    "pool_id": "theme_triage:teacher:themes_triage:tri-01221:a92f8d9485",
+    "split": "cal",
+    "license": "generated:gpt-5.6-sol",
+    "state": {
+     "subject": "急需企业授权报价",
+     "body": "我们工作室计划为下月的电竞体验活动采购 80 个《星港突围》商业展示授权，活动会在五家门店举办，并包含现场直播。请今天内提供阶梯报价，分别列出一个月和一年授权的含税价格，同时说明能否统一管理账号、限制玩家购买，以及是否允许在直播画面中展示游戏内容。我们尚未购买，不需要排查运行问题。预算明早提交，请将正式方案、付款条件和开通周期发送至 <email>，订单联系人可通过 <tel_num> 联系。"
+    },
+    "gold_queue": "Sales and Pre-Sales",
+    "difficulty": "clear",
+    "channel": "email",
+    "gold_folder": "销售线索"
+   }
+  ]
+ }
+}

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-zh="Jev-Style v3 中文与多语言">Jev-Style v3 Chinese &amp; 51 languages</title>
+<link rel="stylesheet" href="/common.css">
+<link rel="stylesheet" href="zh.css">
+<script src="/common.js" defer></script>
+<script src="zh.js" defer></script>
+</head>
+<body>
+<main>
+  <h1><span lang="en">Chinese &amp; 51 languages</span><span lang="zh">中文与多语言</span></h1>
+  <p class="mj-muted zh-lead">
+    <span lang="en">Chinese tickets and e-mails, and one intent question in 51 languages.</span>
+    <span lang="zh">中文工单和邮件，以及同一个意图问题的 51 种语言版本。</span>
+  </p>
+
+  <div class="mj-seg zh-tabs" id="zh-tabs" role="tablist">
+    <button type="button" role="tab" data-tab="triage" aria-pressed="true"><span lang="en">Ticket triage</span><span lang="zh">客服分诊</span></button>
+    <button type="button" role="tab" data-tab="inbox" aria-pressed="false"><span lang="en">Inbox sorting</span><span lang="zh">邮件分拣</span></button>
+    <button type="button" role="tab" data-tab="intent" aria-pressed="false"><span lang="en">51 languages</span><span lang="zh">51 种语言</span></button>
+  </div>
+
+  <div class="zh-key" id="zh-key" hidden>
+    <label class="mj-small" for="zh-key-input"><span lang="en">API key</span><span lang="zh">API 密钥</span></label>
+    <div class="mj-row">
+      <input class="mj-input" id="zh-key-input" type="password" autocomplete="off">
+      <button class="mj-btn" type="button" id="zh-key-save"><span lang="en">Use</span><span lang="zh">使用</span></button>
+    </div>
+  </div>
+  <p class="mj-small zh-status" id="zh-status" aria-live="polite"></p>
+
+  <!-- triage -->
+  <section class="zh-panel" id="p-triage">
+    <div class="zh-grid">
+      <div class="zh-list" id="tri-list" role="listbox" aria-label="tickets"></div>
+      <div class="zh-work">
+        <div class="mj-card">
+          <label class="mj-small mj-muted" for="tri-subject"><span lang="en">Subject</span><span lang="zh">主题</span></label>
+          <input class="mj-input" id="tri-subject" lang="zh-CN">
+          <label class="mj-small mj-muted zh-lbl" for="tri-body"><span lang="en">Message</span><span lang="zh">内容</span></label>
+          <textarea class="mj-textarea zh-body" id="tri-body" rows="7" lang="zh-CN"></textarea>
+          <div class="mj-row zh-run">
+            <button class="mj-btn primary" type="button" id="tri-run"><span lang="en">Triage</span><span lang="zh">分诊</span></button>
+            <span class="mj-small mj-muted" id="tri-time"></span>
+          </div>
+        </div>
+        <div class="zh-answers" id="tri-out"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- inbox -->
+  <section class="zh-panel" id="p-inbox" hidden>
+    <div class="mj-row zh-run">
+      <button class="mj-btn primary" type="button" id="inbox-run"><span lang="en">Sort the inbox</span><span lang="zh">分拣收件箱</span></button>
+      <span class="mj-small mj-muted" id="inbox-sum"></span>
+    </div>
+    <div class="zh-board" id="inbox-board"></div>
+    <div class="mj-card zh-mail" id="inbox-detail" hidden></div>
+  </section>
+
+  <!-- intent -->
+  <section class="zh-panel" id="p-intent" hidden>
+    <div class="zh-controls">
+      <label class="mj-small"><span lang="en">Language</span><span lang="zh">语言</span>
+        <select class="mj-select" id="int-lang"></select></label>
+      <label class="mj-small"><span lang="en">Utterance</span><span lang="zh">语句</span>
+        <select class="mj-select" id="int-item"></select></label>
+    </div>
+    <div class="mj-card zh-utt">
+      <div class="zh-utt-text" id="int-utt"></div>
+      <div class="mj-small mj-muted" id="int-en"></div>
+      <div class="mj-row zh-run">
+        <button class="mj-btn primary" type="button" id="int-run"><span lang="en">Ask</span><span lang="zh">提问</span></button>
+        <button class="mj-btn" type="button" id="int-all"><span lang="en">Ask in all 51 languages</span><span lang="zh">51 种语言都问一遍</span></button>
+        <span class="mj-small mj-muted" id="int-time"></span>
+      </div>
+      <div id="int-out"></div>
+    </div>
+    <div class="zh-allsum mj-small" id="int-allsum" hidden></div>
+    <div class="zh-cells" id="int-cells"></div>
+  </section>
+
+  <p class="mj-small mj-muted zh-foot">
+    <span lang="en">Chinese cases: our dev/cal pool (synthetic). Utterances: Amazon MASSIVE 1.1 dev, CC BY 4.0.</span>
+    <span lang="zh">中文案例：本项目 dev/cal 数据（合成）。语句：Amazon MASSIVE 1.1 dev，CC BY 4.0。</span>
+    <a href="LICENSES.md"><span lang="en">Sources</span><span lang="zh">来源</span></a>
+  </p>
+</main>
+</body>
+</html>

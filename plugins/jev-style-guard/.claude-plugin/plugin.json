@@ -1,0 +1,9 @@
+{
+  "name": "jev-style-guard",
+  "version": "0.1.0",
+  "description": "PreToolUse hook: the local Jev-Style decision model checks tool calls before they run (allow / ask / deny). Needs the jev-style CLI and `jev-style serve` running.",
+  "author": {"name": "chaoliangUNSW", "url": "https://github.com/lawrence3699"},
+  "homepage": "https://github.com/lawrence3699/jev-style",
+  "license": "Apache-2.0",
+  "keywords": ["guardrails", "security", "hooks", "local"]
+}

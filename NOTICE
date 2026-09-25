@@ -1,0 +1,16 @@
+jev-style
+Copyright 2026 chaoliangUNSW (GitHub: lawrence3699). Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The model weights are downloaded at run time from the Hugging Face Hub
+(chaoliangUNSW/Jev-Style-0.8B-Decision-v3 and its -MLX / -GGUF builds). They are a fine-tuned
+derivative of Qwen3.5-0.8B (Copyright 2026 Alibaba Cloud, Apache-2.0); see the NOTICE file of each
+model repository for the modifications.
+
+The question types (choice / score / noul) and the request shape follow the public typed-decision
+("systemone") convention so the same client code works against different servers.
+
+Not affiliated with, endorsed by or connected to TypeSafe or Jev. "Jev-Style" only describes the kind
+of model (a small typed-decision model in a similar style); no Jev weights, code or outputs are included.
+Not affiliated with or endorsed by Alibaba Cloud / the Qwen team, the Laya authors or the Kev authors.
+
+Web demos: see the LICENSES.md file inside each folder under jev_style/web/ for third-party data.

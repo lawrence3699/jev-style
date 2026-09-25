@@ -1,0 +1,9 @@
+{
+  "slug": "snake",
+  "title_en": "Snake",
+  "title_zh": "贪吃蛇",
+  "summary_en": "A browser Snake game: each tick code lists the legal moves and tells Jev-Style v3 only whether each one gets closer to the food; code alone filters deadly moves and counts free space. Compare against a greedy code bot on the same seeds.",
+  "summary_zh": "浏览器里的贪吃蛇：每一步由代码列出可走方向，只告诉 Jev-Style v3 每个方向是靠近还是远离食物；致命方向和剩余空间只由代码处理。可在相同种子上与贪心代码对比。",
+  "order": 2,
+  "entry": "index.html"
+}

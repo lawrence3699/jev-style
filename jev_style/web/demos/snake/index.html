@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-zh="Jev-Style v3 贪吃蛇">Jev-Style v3 Snake</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/common.css">
+<link rel="stylesheet" href="snake.css">
+<script src="/common.js" defer></script>
+<script src="snake-core.js" defer></script>
+<script src="snake.js" defer></script>
+</head>
+<body>
+<main class="sn-main">
+  <h1><span lang="en">Snake</span><span lang="zh">贪吃蛇</span></h1>
+  <p class="mj-muted sn-lead">
+    <span lang="en">Each step, code lists the legal moves with facts; Jev-Style 0.8B Decision v3 picks one.</span>
+    <span lang="zh">每一步由代码列出可走的方向和事实，Jev-Style 0.8B Decision v3 从中选一个。</span>
+  </p>
+
+  <div class="sn-layout">
+    <section class="sn-play" aria-labelledby="sn-play-h">
+      <h2 id="sn-play-h" class="sn-vh"><span lang="en">Board</span><span lang="zh">棋盘</span></h2>
+      <div class="sn-boardwrap" id="sn-wrap">
+        <canvas id="sn-board" role="img" data-aria-label-en="Snake board" data-aria-label-zh="贪吃蛇棋盘"></canvas>
+        <div class="sn-badge" id="sn-badge" hidden></div>
+        <div class="sn-over" id="sn-over" role="status" hidden></div>
+      </div>
+
+      <div class="sn-stats">
+        <div class="sn-stat"><span class="k"><span lang="en">Score</span><span lang="zh">得分</span></span><b id="sn-score">0</b></div>
+        <div class="sn-stat"><span class="k"><span lang="en">Length</span><span lang="zh">长度</span></span><b id="sn-length">3</b></div>
+        <div class="sn-stat"><span class="k"><span lang="en">Steps</span><span lang="zh">步数</span></span><b id="sn-steps">0</b></div>
+        <div class="sn-stat"><span class="k"><span lang="en">Per decision</span><span lang="zh">每次决策</span></span><b id="sn-ms">–</b><span class="sub" id="sn-ms-sub"></span></div>
+        <div class="sn-stat"><span class="k"><span lang="en">Moves / s</span><span lang="zh">步 / 秒</span></span><b id="sn-mps">–</b></div>
+      </div>
+
+      <div class="mj-row sn-controls">
+        <button class="mj-btn primary" type="button" id="sn-start"><span lang="en">Start</span><span lang="zh">开始</span></button>
+        <button class="mj-btn" type="button" id="sn-step"><span lang="en">Step</span><span lang="zh">单步</span></button>
+        <button class="mj-btn" type="button" id="sn-reset"><span lang="en">Reset</span><span lang="zh">重来</span></button>
+        <label class="sn-speed mj-small">
+          <span lang="en">Speed</span><span lang="zh">速度</span>
+          <input type="range" id="sn-speed" min="1" max="21" step="1" value="6"
+                 data-aria-label-en="Moves per second" data-aria-label-zh="每秒步数">
+          <output id="sn-speed-v" for="sn-speed">6/s</output>
+        </label>
+      </div>
+      <p class="mj-small mj-muted sn-session" id="sn-session" aria-live="polite"></p>
+    </section>
+
+    <section class="sn-side" aria-labelledby="sn-side-h">
+      <h2 id="sn-side-h" class="sn-vh"><span lang="en">Decision</span><span lang="zh">决策</span></h2>
+      <div class="mj-card sn-setup">
+        <div class="mj-row">
+          <div class="mj-seg" id="sn-player" role="group" data-aria-label-en="Player" data-aria-label-zh="玩家">
+            <button type="button" data-player="model" aria-pressed="true">Jev-Style v3</button>
+            <button type="button" data-player="greedy" aria-pressed="false"><span lang="en">Greedy code bot</span><span lang="zh">贪心代码</span></button>
+          </div>
+          <label class="mj-small sn-check"><input type="checkbox" id="sn-filter" checked>
+            <span lang="en">Code filters deadly moves</span><span lang="zh">代码过滤致命方向</span></label>
+        </div>
+        <div class="mj-row sn-setup-row">
+          <label class="mj-small sn-inline"><span lang="en">Seed</span><span lang="zh">种子</span>
+            <input class="mj-input sn-seed" id="sn-seed" type="number" min="0" max="4294967295" step="1" value="1"></label>
+          <button class="mj-btn icon" type="button" id="sn-dice" data-title-en="Random seed" data-title-zh="随机种子"
+                  data-aria-label-en="Random seed" data-aria-label-zh="随机种子">↻</button>
+          <label class="mj-small sn-inline"><span lang="en">Grid</span><span lang="zh">棋盘</span>
+            <select class="mj-select sn-size" id="sn-size"></select></label>
+          <label class="mj-small sn-check"><input type="checkbox" id="sn-auto">
+            <span lang="en">Auto-restart</span><span lang="zh">自动下一局</span></label>
+        </div>
+      </div>
+
+      <div class="mj-card sn-movecard" aria-live="off">
+        <div class="sn-movehead">
+          <h3><span lang="en">Last move</span><span lang="zh">上一步</span></h3>
+          <span class="mj-chip" id="sn-mode"></span>
+          <span class="mj-small mj-muted" id="sn-conf"></span>
+        </div>
+        <div class="sn-moves" id="sn-moves"></div>
+        <p class="mj-small mj-muted sn-honest" id="sn-honest"></p>
+      </div>
+
+      <p class="mj-err" id="sn-error" role="alert" hidden></p>
+
+      <details class="mj-card sn-details" id="sn-decision">
+        <summary><span lang="en">Decision: what code sent, what came back</span><span lang="zh">决策：代码发了什么，收到什么</span></summary>
+        <div class="sn-tablewrap">
+          <table class="sn-facts">
+            <thead><tr>
+              <th><span lang="en">Move</span><span lang="zh">方向</span></th>
+              <th><span lang="en">Code</span><span lang="zh">代码处理</span></th>
+              <th><span lang="en">Sent to the model</span><span lang="zh">发给模型的说明</span></th>
+              <th><span lang="en">All code facts</span><span lang="zh">代码算出的全部事实</span></th>
+              <th>p</th>
+            </tr></thead>
+            <tbody id="sn-facts"></tbody>
+          </table>
+        </div>
+        <h3><span lang="en">State text (as sent)</span><span lang="zh">状态文本（原样发送）</span></h3>
+        <pre id="sn-statetext" class="sn-statetext">–</pre>
+        <h3><span lang="en">Request</span><span lang="zh">请求</span> <code class="mj-small">POST /v1/systemone</code></h3>
+        <pre id="sn-req">–</pre>
+        <h3><span lang="en">Response</span><span lang="zh">响应</span></h3>
+        <pre id="sn-res">–</pre>
+      </details>
+
+      <details class="mj-card sn-details" id="sn-compare">
+        <summary><span lang="en">Compare with the greedy code bot</span><span lang="zh">与贪心代码对比</span></summary>
+        <div class="mj-row sn-cmp-row">
+          <label class="mj-small sn-inline"><span lang="en">Games</span><span lang="zh">局数</span>
+            <input class="mj-input sn-n" id="sn-cmp-n" type="number" min="1" max="50" step="1" value="5"></label>
+          <button class="mj-btn primary" type="button" id="sn-cmp-run"><span lang="en">Run</span><span lang="zh">运行</span></button>
+          <button class="mj-btn" type="button" id="sn-cmp-stop" hidden><span lang="en">Stop</span><span lang="zh">停止</span></button>
+          <span class="mj-small mj-muted" id="sn-cmp-status" aria-live="polite"></span>
+        </div>
+        <p class="mj-small mj-muted">
+          <span lang="en">Both play the same seeds (seed, seed+1, …) and grid with the same code facts. The bot takes the safe move with the shortest food distance.</span>
+          <span lang="zh">两边用相同的种子（seed、seed+1……）、相同棋盘和相同的代码事实。贪心代码在安全方向里选离食物最近的。</span>
+        </p>
+        <div class="sn-tablewrap">
+          <table class="sn-cmp">
+            <thead><tr>
+              <th>#</th>
+              <th><span lang="en">Seed</span><span lang="zh">种子</span></th>
+              <th>Jev-Style v3</th>
+              <th><span lang="en">Greedy code bot</span><span lang="zh">贪心代码</span></th>
+            </tr></thead>
+            <tbody id="sn-cmp-body"></tbody>
+            <tfoot id="sn-cmp-foot"></tfoot>
+          </table>
+        </div>
+      </details>
+    </section>
+  </div>
+
+  <footer class="mj-small mj-muted sn-foot">
+    <p><span lang="en">State: grid size, snake cells (head first), direction, food and a small ASCII board. Question: one choice among the offered moves; each option says whether the move gets closer to the food (Manhattan distance before→after), or that it is deadly when the filter is off. Code also counts the free cells reachable after each move (flood fill); that count is shown in the decision panel but not sent. The seed fixes where food appears, so a seed replays the same game.</span>
+       <span lang="zh">状态：棋盘大小、蛇身坐标（头在前）、方向、食物和一个 ASCII 小棋盘。问题：在代码给出的方向里单选；每个选项只说明这一步是靠近还是远离食物（前后曼哈顿距离），过滤关闭时也会标明致命方向。代码还会用洪水填充计算每步之后的可达空格数，只在决策面板里显示，不发给模型。种子决定食物出现的位置，同一个种子能复现同一局。</span></p>
+  </footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "jev-style",
+  "version": "0.1.0",
+  "description": "Skills and MCP tools for the local Jev-Style decision model (yes/no, choice and score questions with calibrated probabilities).",
+  "author": {"name": "chaoliangUNSW", "url": "https://github.com/lawrence3699"},
+  "homepage": "https://github.com/lawrence3699/jev-style",
+  "repository": "https://github.com/lawrence3699/jev-style",
+  "license": "Apache-2.0",
+  "keywords": ["decision-model", "classification", "routing", "guardrails", "local", "mcp"],
+  "mcpServers": {
+    "jev-style": {"command": "jev-style", "args": ["mcp"]}
+  }
+}

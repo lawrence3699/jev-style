@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-zh="Jev-Style v3 Agent 操作审批">Jev-Style v3 Agent action approval</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/common.css">
+<link rel="stylesheet" href="approval.css">
+<script src="/common.js" defer></script>
+<script src="approval.js" defer></script>
+</head>
+<body>
+<main class="aa-main">
+  <h1><span lang="en">Agent action approval</span><span lang="zh">Agent 操作审批</span></h1>
+  <p class="mj-muted aa-lead">
+    <span lang="en">Before each command runs, code checks hard rules and Jev-Style v3 answers four questions; the answers set allow / ask / deny.</span>
+    <span lang="zh">每条命令运行前，代码先查硬规则，Jev-Style v3 回答四个问题；答案决定允许 / 询问 / 拒绝。</span>
+  </p>
+
+  <div class="aa-top" id="aa-top">
+    <div class="aa-stat allow"><b id="aa-n-allow">0</b><span class="k">✓ <span lang="en">allowed</span><span lang="zh">允许</span></span></div>
+    <div class="aa-stat ask"><b id="aa-n-ask">0</b><span class="k">? <span lang="en">asked</span><span lang="zh">询问</span></span></div>
+    <div class="aa-stat deny"><b id="aa-n-deny">0</b><span class="k">✕ <span lang="en">denied</span><span lang="zh">拒绝</span></span></div>
+    <div class="aa-stat"><b id="aa-ms">–</b><span class="k"><span lang="en">per check</span><span lang="zh">每次检查</span></span></div>
+    <div class="aa-stat model"><b id="aa-model">–</b><span class="k"><span lang="en">model</span><span lang="zh">模型</span></span></div>
+  </div>
+
+  <div class="mj-row aa-controls">
+    <button class="mj-btn primary" type="button" id="aa-play"><span lang="en">▶ Play</span><span lang="zh">▶ 播放</span></button>
+    <button class="mj-btn" type="button" id="aa-step"><span lang="en">Step</span><span lang="zh">单步</span></button>
+    <button class="mj-btn" type="button" id="aa-reset"><span lang="en">Reset</span><span lang="zh">重来</span></button>
+    <div class="mj-seg aa-speed" id="aa-speed" role="group" data-aria-label-en="Speed" data-aria-label-zh="速度">
+      <button type="button" data-speed="0.5" aria-pressed="false">½×</button>
+      <button type="button" data-speed="1" aria-pressed="true">1×</button>
+      <button type="button" data-speed="2" aria-pressed="false">2×</button>
+      <button type="button" data-speed="4" aria-pressed="false">4×</button>
+    </div>
+  </div>
+
+  <section class="aa-term" id="aa-term" data-aria-label-en="Agent session" data-aria-label-zh="Agent 会话">
+    <div class="aa-titlebar"><i></i><i></i><i></i><span id="aa-session">agent · /work/shop-api</span></div>
+    <div class="aa-cols" aria-hidden="true">
+      <span class="c-cmd"></span><span class="c-chip"></span><span class="c-src"></span>
+      <span class="c-bars">
+        <span data-title-en="Would it delete, overwrite or irreversibly change something?" data-title-zh="会不会删除、覆盖或不可逆地改变东西？"><span lang="en"><span class="lg">destructive</span><span class="sh">destr.</span></span><span lang="zh">破坏性</span></span>
+        <span data-title-en="Would it send local data to the network?" data-title-zh="会不会把本地数据发到网络上？"><span lang="en"><span class="lg">exfiltration</span><span class="sh">exfil.</span></span><span lang="zh">外传</span></span>
+        <span data-title-en="Does it touch paths outside the project?" data-title-zh="会不会碰到项目以外的路径？"><span lang="en"><span class="lg">outside</span><span class="sh">outside</span></span><span lang="zh">项目外</span></span>
+        <span data-title-en="Does it read or send secrets?" data-title-zh="会不会读取或发送密钥？"><span lang="en"><span class="lg">secrets</span><span class="sh">secret</span></span><span lang="zh">密钥</span></span>
+      </span>
+      <span class="c-ms">ms</span>
+    </div>
+    <div class="aa-feed" id="aa-feed" role="list">
+      <button class="aa-bigplay" type="button" id="aa-bigplay"><b>▶</b><span lang="en">Play session</span><span lang="zh">播放会话</span></button>
+    </div>
+    <form class="aa-try" id="aa-try" autocomplete="off">
+      <span class="aa-prompt">$</span>
+      <input class="aa-cmd-input" id="aa-cmd" type="text" spellcheck="false" autocapitalize="off" maxlength="2000"
+             data-placeholder-en="Try your own command" data-placeholder-zh="试试你自己的命令"
+             data-aria-label-en="Try your own command" data-aria-label-zh="试试你自己的命令">
+      <button class="aa-check" type="submit" id="aa-check"><span lang="en">Check</span><span lang="zh">检查</span></button>
+    </form>
+  </section>
+  <p class="mj-err" id="aa-error" role="alert" hidden></p>
+
+  <details class="mj-card aa-sent" id="aa-sent">
+    <summary><span lang="en">What was sent</span><span lang="zh">发送了什么</span></summary>
+    <div class="aa-sent-head" id="aa-sent-head">–</div>
+    <div class="aa-tablewrap">
+      <table class="aa-vt">
+        <thead><tr>
+          <th><span lang="en">Question</span><span lang="zh">问题</span></th>
+          <th><span lang="en">Answer</span><span lang="zh">回答</span></th>
+          <th><span lang="en">ask ≥</span><span lang="zh">询问 ≥</span></th>
+          <th><span lang="en">deny ≥</span><span lang="zh">拒绝 ≥</span></th>
+          <th><span lang="en">Sets</span><span lang="zh">结果</span></th>
+        </tr></thead>
+        <tbody id="aa-vt"></tbody>
+      </table>
+    </div>
+    <h3><span lang="en">Hard rule</span><span lang="zh">硬规则</span></h3>
+    <p class="aa-rule" id="aa-rule">–</p>
+    <h3><span lang="en">Request</span><span lang="zh">请求</span> <code class="mj-small">POST /api/agent-approval/check</code></h3>
+    <pre id="aa-req">–</pre>
+    <h3><span lang="en">Response</span><span lang="zh">响应</span></h3>
+    <pre id="aa-res">–</pre>
+    <h3><span lang="en">Sent to the model</span><span lang="zh">发给模型的</span> <code class="mj-small">POST /v1/systemone</code></h3>
+    <pre id="aa-mreq">–</pre>
+    <h3><span lang="en">Model answered</span><span lang="zh">模型的回答</span></h3>
+    <pre id="aa-mres">–</pre>
+  </details>
+
+  <footer class="mj-small mj-muted aa-foot"><span lang="en">Commands are never run.</span><span lang="zh">命令从不执行。</span></footer>
+</main>
+</body>
+</html>

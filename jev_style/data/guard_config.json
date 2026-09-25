@@ -1,0 +1,210 @@
+{
+  "_about": "Jev-Style guard settings. Keys starting with '_' are notes and are ignored. Environment overrides: JEV_STYLE_GUARD_CONFIG (another file), JEV_STYLE_GUARD_URL, JEV_STYLE_GUARD_LOG, JEV_STYLE_GUARD_DRY_RUN=1, JEV_STYLE_GUARD_DISABLE=1.",
+  "server_url": "http://127.0.0.1:8765",
+  "_server_url": "Only loopback hosts are accepted unless allow_remote_server is true, because the full command is sent to the server.",
+  "allow_remote_server": false,
+  "api_key_env": "JEV_STYLE_API_KEY",
+  "timeout_s": 8,
+  "dry_run": false,
+  "_dry_run": "true = compute and log the verdict, print nothing (Claude Code behaves as if the hook were absent).",
+  "emit_allow": false,
+  "_emit_allow": "false = an 'allow' verdict prints nothing, so Claude Code's normal permission prompts still apply. true = the guard auto-approves calls it judges safe.",
+  "on_error": "ask",
+  "_on_error": "Verdict when the server is down, times out, or rejects the request: 'ask' or 'deny' (never 'allow').",
+  "log_path": "~/.local/state/jev-style-guard/guard.jsonl",
+  "log_preview_chars": 300,
+  "max_field_chars": 0,
+  "_max_field_chars": "0 (default) = never shorten: the whole call is sent, and a call too big for the model's 25,600-token context comes back as input_budget_exceeded, which becomes 'ask'. A positive value shortens longer strings with a visible marker, and any shortened call is raised to at least 'ask' because the model did not see all of it.",
+  "drop_fields": {
+    "Bash": [
+      "description"
+    ]
+  },
+  "_drop_fields": "Top-level argument names hidden from the model, per tool ('*' = every tool). Bash's description is the agent's own account of the command and must not talk the guard into anything. Nested keys are never dropped.",
+  "skip_tools": [
+    "Glob",
+    "Grep",
+    "LS",
+    "TodoWrite",
+    "TodoRead",
+    "Task",
+    "ExitPlanMode"
+  ],
+  "skip_tools_regex": [
+    "^mcp__.*jev[-_]style"
+  ],
+  "thresholds": {
+    "_about": "noul answers are P(true) in [0,1]; 'risk' is the expected level index in [0,4] (none, low, moderate, high, severe). A value at or above 'deny' denies, else at or above 'ask' asks. null disables a bound. The strictest verdict across questions wins.",
+    "destructive": {
+      "ask": 0.5,
+      "deny": 0.93
+    },
+    "exfiltration": {
+      "ask": 0.5,
+      "deny": 0.93
+    },
+    "outside_project": {
+      "ask": 0.6,
+      "deny": null
+    },
+    "secrets": {
+      "ask": 0.5,
+      "deny": 0.95
+    },
+    "risk": {
+      "ask": 2.0,
+      "deny": 3.4
+    }
+  },
+  "_hard_rules": "Regexes checked in code before the model (on the Bash command, or on the JSON arguments for other tools; 'tools' omitted = every tool). They can only make a verdict stricter, never looser.",
+  "hard_rules": [
+    {
+      "name": "wipe-root-or-home",
+      "decision": "deny",
+      "tools": [
+        "Bash"
+      ],
+      "pattern": "\\brm\\s+(?=(?:-[-a-zA-Z]+\\s+)*(?:-[a-zA-Z]*[rR]|--recursive\\b))(?:-[-a-zA-Z]+\\s+)*[\"']?(?:/|~|\\$HOME|\\$\\{HOME\\})/?\\*?[\"']?(?=\\s|$|[;&|)])",
+      "reason": "recursive delete of / or the home directory"
+    },
+    {
+      "name": "wipe-system-dir",
+      "decision": "deny",
+      "tools": [
+        "Bash"
+      ],
+      "pattern": "\\brm\\s+(?=(?:-[-a-zA-Z]+\\s+)*(?:-[a-zA-Z]*[rR]|--recursive\\b))(?:-[-a-zA-Z]+\\s+)*[\"']?/(?:etc|usr|bin|sbin|System|Library|Applications|Users|home|var|opt|private)/?\\*?[\"']?(?=\\s|$|[;&|)])",
+      "reason": "recursive delete of a top-level system folder"
+    },
+    {
+      "name": "delete-in-home",
+      "decision": "ask",
+      "tools": [
+        "Bash"
+      ],
+      "pattern": "\\brm\\s+(?=(?:-[-a-zA-Z]+\\s+)*(?:-[a-zA-Z]*[rR]|--recursive\\b))(?:-[-a-zA-Z]+\\s+)*[\"']?(?:~|\\$HOME|\\$\\{HOME\\})/[^\\s;&|]+",
+      "reason": "recursive delete inside the home directory"
+    },
+    {
+      "name": "find-delete-root",
+      "decision": "deny",
+      "tools": [
+        "Bash"
+      ],
+      "pattern": "\\bfind\\s+[\"']?/[\"']?\\s[^;&|\\n]*(?:-delete\\b|-exec\\s+rm\\b)",
+      "reason": "find ... -delete over the whole disk"
+    },
+    {
+      "name": "find-delete-home",
+      "decision": "ask",
+      "tools": [
+        "Bash"
+      ],
+      "pattern": "\\bfind\\s+[\"']?(?:~|\\$HOME|\\$\\{HOME\\})[^\\s;&|]*\\s[^;&|\\n]*(?:-delete\\b|-exec\\s+rm\\b)",
+      "reason": "find ... -delete inside the home directory"
+    },
+    {
+      "name": "recursive-chmod-root-or-home",
+      "decision": "deny",
+      "tools": [
+        "Bash"
+      ],
+      "pattern": "\\b(?:chmod|chown|chgrp)\\s+(?:-[-a-zA-Z]+\\s+)*(?:-[a-zA-Z]*R[a-zA-Z]*|--recursive)\\s+(?:-[-a-zA-Z]+\\s+)*\\S+\\s+[\"']?(?:/|~|\\$HOME|\\$\\{HOME\\})/?[\"']?(?=\\s|$|[;&|)])",
+      "reason": "recursive permission change on / or the home directory"
+    },
+    {
+      "name": "format-disk",
+      "decision": "deny",
+      "tools": [
+        "Bash"
+      ],
+      "pattern": "\\b(mkfs(\\.\\w+)?|diskutil\\s+(erase\\w*|zeroDisk|secureErase))\\b|\\bdd\\b[^|;&]*\\bof=/dev/",
+      "reason": "formats or overwrites a disk"
+    },
+    {
+      "name": "fork-bomb",
+      "decision": "deny",
+      "tools": [
+        "Bash"
+      ],
+      "pattern": ":\\(\\)\\s*\\{\\s*:\\|:&\\s*\\}\\s*;\\s*:",
+      "reason": "fork bomb"
+    },
+    {
+      "name": "force-push-main",
+      "decision": "deny",
+      "tools": [
+        "Bash"
+      ],
+      "pattern": "\\bgit\\b[^;&|\\n]*?\\spush\\b(?=[^;&|\\n]*\\s(?:--force(?:-with-lease)?(?:=\\S*)?|-[a-zA-Z]*f[a-zA-Z]*)(?=\\s|$))(?=[^;&|\\n]*[\\s:](?:main|master)(?=\\s|$|[;&|]))|\\bgit\\b[^;&|\\n]*?\\spush\\b[^;&|\\n]*\\s\\+(?:\\S*:)?(?:main|master)(?=\\s|$|[;&|])",
+      "reason": "force-pushes main or master"
+    },
+    {
+      "name": "force-push",
+      "decision": "ask",
+      "tools": [
+        "Bash"
+      ],
+      "pattern": "\\bgit\\b[^;&|\\n]*?\\spush\\b[^;&|\\n]*\\s(?:--force(?:-with-lease)?(?:=\\S*)?|-[a-zA-Z]*f[a-zA-Z]*|\\+\\S+)(?=\\s|$|[;&|])",
+      "reason": "force-push rewrites remote history"
+    },
+    {
+      "name": "private-key-read",
+      "decision": "deny",
+      "tools": [
+        "Bash"
+      ],
+      "pattern": "(?:\\b(?:cat|less|more|head|tail|bat|cp|mv|scp|rsync|base64|xxd|od|hexdump|strings|tar|zip|gzip|curl|wget|nc|ncat|pbcopy|openssl|gpg|python3?|node|perl|ruby)\\b[^;&|\\n]*|<\\s*|@)[\"']?[^\\s;&|\"']*\\.ssh/id_[A-Za-z0-9_-]+(?![A-Za-z0-9_.-])",
+      "reason": "reads or sends an SSH private key"
+    },
+    {
+      "name": "private-key-file-tool",
+      "decision": "deny",
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "MultiEdit",
+        "NotebookEdit"
+      ],
+      "pattern": "\\.ssh/id_[A-Za-z0-9_-]+(?![A-Za-z0-9_.-])",
+      "reason": "opens an SSH private key"
+    },
+    {
+      "name": "browser-cookies-or-passwords",
+      "decision": "deny",
+      "pattern": "(?i)(?:Cookies\\.binarycookies|/(?:Cookies|Login Data|Web Data)(?=[\"'\\s]|$)|cookies\\.sqlite|logins\\.json|key4\\.db|\\bsecurity\\s+(?:find-generic-password|find-internet-password|dump-keychain)\\b[^;&|\\n]*\\s-[a-z]*[gw])",
+      "reason": "reads browser cookies, saved passwords or keychain secrets"
+    },
+    {
+      "name": "credential-store",
+      "decision": "ask",
+      "pattern": "(?:~|\\$HOME|\\$\\{HOME\\}|/(?:Users|home)/[^/\\s\"']+)/\\.(?:aws|ssh|gnupg|kube|docker|netrc|pypirc|npmrc|git-credentials|config/gcloud|config/gh)(?![A-Za-z0-9_-])",
+      "reason": "touches a credential store in the home directory"
+    },
+    {
+      "name": "dotenv",
+      "decision": "ask",
+      "pattern": "(?:^|[\\s/\"'=@<:])\\.env(?!\\.(?:example|sample|template|dist)\\b)(?:\\.[\\w-]+)?(?=$|[\\s\"';&|)])",
+      "reason": "touches a .env file"
+    },
+    {
+      "name": "pipe-download-to-shell",
+      "decision": "ask",
+      "tools": [
+        "Bash"
+      ],
+      "pattern": "\\b(curl|wget)\\b[^|;&]*\\|\\s*(sudo\\s+)?(ba|z|da)?sh\\b",
+      "reason": "runs a downloaded script"
+    },
+    {
+      "name": "sudo",
+      "decision": "ask",
+      "tools": [
+        "Bash"
+      ],
+      "pattern": "(^|[;&|]\\s*)sudo\\s",
+      "reason": "runs as root"
+    }
+  ]
+}

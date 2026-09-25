@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.10", "3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install (no model backends; tests use the fake engine)
+        run: uv venv && uv pip install -e ".[dev]"
+      - name: Tests
+        run: uv run --no-sync pytest -q
+      - name: CLI smoke test
+        run: |
+          uv run --no-sync jev-style decide "I was charged twice" --fake --noul "About billing?" --choice "Team?::billing,tech"
+          uv run --no-sync jev-style eval examples/support_tickets.jsonl --fake
+          uv run --no-sync jev-style guard-replay --fake
+      - name: Skill scanner smoke test
+        run: python3 skills/jev-style-adopt/scripts/find_decisions.py jev_style --min-score 1
+      - name: JSON manifests parse
+        run: |
+          for f in .claude-plugin/*.json plugins/*/.claude-plugin/*.json plugins/*/hooks/*.json jev_style/data/*.json; do
+            python3 -m json.tool "$f" > /dev/null || { echo "bad json: $f"; exit 1; }
+          done

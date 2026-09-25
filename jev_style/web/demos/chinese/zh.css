@@ -1,0 +1,54 @@
+/* Chinese & multilingual demo. Uses the tokens from /common.css only. */
+.zh-lead { margin: -4px 0 12px; }
+.zh-tabs { margin-bottom: 12px; max-width: 100%; overflow-x: auto; }
+.zh-key { margin: 0 0 12px; max-width: 420px; }
+.zh-status:empty { display: none; }
+.zh-run { margin-top: 10px; }
+.zh-lbl { display: block; margin-top: 8px; }
+.zh-body { font-family: inherit; font-size: 14px; line-height: 1.6; }
+
+/* triage */
+.zh-grid { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 760px) { .zh-grid { grid-template-columns: minmax(0, 1fr); } }
+.zh-list { display: grid; gap: 6px; max-height: 70vh; overflow: auto; }
+@media (max-width: 760px) { .zh-list { grid-auto-flow: column; grid-auto-columns: minmax(180px, 70%); max-height: none; overflow-x: auto; padding-bottom: 4px; } }
+.zh-item { text-align: left; font: inherit; font-size: 13px; color: var(--fg); background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 8px 10px; cursor: pointer; display: grid; gap: 4px; }
+.zh-item[aria-selected="true"] { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.zh-item .s { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zh-answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 12px; }
+.zh-ans { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; min-width: 0; }
+.zh-ans h3 { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.zh-ans .big { font-size: 18px; font-weight: 600; margin: 2px 0 6px; }
+.zh-ans .mj-bars { grid-template-columns: minmax(0, 46%) 1fr auto; }
+
+/* inbox */
+.zh-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+@media (max-width: 760px) { .zh-board { grid-template-columns: minmax(0, 1fr); } }
+.zh-folder { background: var(--soft); border-radius: var(--radius); padding: 8px; min-height: 80px; }
+.zh-folder h3 { display: flex; justify-content: space-between; font-size: 13px; }
+.zh-folder h3 small { color: var(--muted); font-weight: 400; }
+.zh-folder .zh-item { margin-top: 6px; width: 100%; }
+.zh-folder .zh-item.pending { opacity: .6; }
+.zh-chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.zh-mail { margin-top: 12px; }
+.zh-mail .body { white-space: pre-wrap; line-height: 1.65; margin: 6px 0 10px; }
+
+/* intent */
+.zh-controls { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 10px; }
+@media (max-width: 600px) { .zh-controls { grid-template-columns: minmax(0, 1fr); } }
+.zh-controls label { display: grid; gap: 4px; }
+.zh-utt { margin-top: 10px; }
+.zh-utt-text { font-size: 20px; line-height: 1.5; word-break: break-word; }
+#int-out { margin-top: 12px; }
+#int-out .mj-bars { grid-template-columns: minmax(0, 42%) 1fr auto; }
+.zh-allsum { margin: 14px 0 8px; padding: 8px 10px; border-radius: 6px; background: var(--soft); }
+.zh-cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.zh-cell { font: inherit; text-align: left; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 8px; font-size: 12.5px; cursor: pointer; display: grid; gap: 2px; min-width: 0; }
+.zh-cell.ok { border-color: color-mix(in srgb, var(--act) 55%, var(--line)); background: var(--act-bg); }
+.zh-cell.bad { border-color: color-mix(in srgb, var(--block) 55%, var(--line)); background: var(--block-bg); }
+.zh-cell .n { font-weight: 600; display: flex; justify-content: space-between; gap: 4px; }
+.zh-cell .n small { font-weight: 400; color: var(--muted); }
+.zh-cell .p { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 11.5px; }
+.zh-foot { margin-top: 20px; }

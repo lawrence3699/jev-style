@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-zh="置信度演示">Confidence Explorer</title>
+<meta name="description" content="Move option probabilities and watch Jev-Style v3's confidence formula update.">
+<link rel="stylesheet" href="/common.css">
+<link rel="stylesheet" href="/playground/confidence.css">
+<script src="/common.js" defer></script>
+<script src="/playground/confidence.js" defer></script>
+</head>
+<body>
+<main class="cx">
+  <h1><span lang="en">Confidence Explorer</span><span lang="zh">置信度演示</span></h1>
+  <p class="mj-muted cx-lead">
+    <span lang="en">Probabilities say which option wins. Confidence says how far the answer is from a blind guess: 0 when all options are equal, 1 when one option has everything.</span>
+    <span lang="zh">概率说明哪个选项胜出；置信度说明答案离“瞎猜”有多远：所有选项一样时为 0，一个选项占满时为 1。</span>
+  </p>
+
+  <div class="cx-grid">
+    <section class="mj-card">
+      <div class="cx-head">
+        <div class="mj-seg" id="k" role="group" aria-label="options">
+          <button type="button" data-k="3">3</button><button type="button" data-k="4">4</button><button type="button" data-k="5">5</button>
+        </div>
+        <span class="mj-small mj-muted"><span lang="en">options</span><span lang="zh">个选项</span></span>
+        <div class="cx-presets" id="presets">
+          <button type="button" class="mj-btn" data-p="sure"><span lang="en">Sure</span><span lang="zh">确定</span></button>
+          <button type="button" class="mj-btn" data-p="lean"><span lang="en">Leaning</span><span lang="zh">倾向</span></button>
+          <button type="button" class="mj-btn" data-p="split"><span lang="en">Two-way</span><span lang="zh">二选一</span></button>
+          <button type="button" class="mj-btn" data-p="flat"><span lang="en">Even</span><span lang="zh">平均</span></button>
+        </div>
+      </div>
+      <div id="sliders" class="cx-sliders"></div>
+      <p class="mj-small mj-muted"><span lang="en">Moving one slider rescales the others so the total stays 100%.</span><span lang="zh">拖动一个滑块，其他选项按比例缩放，总和保持 100%。</span></p>
+    </section>
+
+    <section class="mj-card cx-out">
+      <div class="cx-result">
+        <div>
+          <div class="mj-small mj-muted"><span lang="en">Answer</span><span lang="zh">答案</span></div>
+          <div class="cx-big" id="winner">A</div>
+        </div>
+        <div>
+          <div class="mj-small mj-muted"><span lang="en">Top probability</span><span lang="zh">最高概率</span></div>
+          <div class="cx-big mono" id="pmax">–</div>
+        </div>
+        <div>
+          <div class="mj-small mj-muted"><span lang="en">Confidence</span><span lang="zh">置信度</span></div>
+          <div class="cx-big mono" id="conf">–</div>
+        </div>
+        <div>
+          <div class="mj-small mj-muted"><span lang="en">Gate</span><span lang="zh">门控</span></div>
+          <div id="tier"></div>
+        </div>
+      </div>
+      <pre class="cx-formula" id="formula" aria-live="polite"></pre>
+      <svg id="plot" class="cx-plot" viewBox="0 0 320 200" role="img" aria-labelledby="plotcap"></svg>
+      <p class="mj-small mj-muted" id="plotcap">
+        <span lang="en">Confidence against the top probability, for 2 to 5 options. The dot is the slider setting. With k options the line starts at p = 1/k.</span>
+        <span lang="zh">置信度随最高概率变化（2 到 5 个选项）。圆点是当前滑块。k 个选项时，线从 p = 1/k 开始。</span>
+      </p>
+      <p class="mj-small mj-muted">
+        <span lang="en">Yes/no questions are the 2-option case: confidence = |2·p(yes) − 1|. Gate here: act ≥ 0.80, review ≥ 0.40, else block (same default as the Playground).</span>
+        <span lang="zh">是非题就是 2 个选项的情况：置信度 = |2·p(是) − 1|。这里的门控：≥ 0.80 执行，≥ 0.40 复核，否则拦截（与试用页默认一致）。</span>
+      </p>
+    </section>
+  </div>
+</main>
+</body>
+</html>
