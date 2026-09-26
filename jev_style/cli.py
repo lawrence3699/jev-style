@@ -118,6 +118,15 @@ def cmd_guard(argv: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from .models import MissingBackendError
+    try:
+        return _main(argv)
+    except MissingBackendError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+
+def _main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     # subcommands with their own parsers
     if argv and argv[0] == "guard":

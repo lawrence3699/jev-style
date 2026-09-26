@@ -15,6 +15,9 @@ Versions follow [semantic versioning](https://semver.org/). Each release pins th
 - A release that is not pinned yet can still be loaded from a local folder (`model_dir`), or from its main branch
   with `trust_remote_code=True`.
 - `models.load_release()` returns the build as well; `models.load()` keeps its 0.2 return value.
+- **Fail fast without a backend.** With only `pip install jev-style` (the client), loading the model used to download
+  1-2 GB and then stop at `No module named 'torch'`. It now stops before the download with `MissingBackendError`,
+  which names the extra to install (`[mlx]` on Apple silicon, `[torch]` elsewhere); the CLI prints it as one line.
 
 ## 0.2.0 (2026-09-26)
 

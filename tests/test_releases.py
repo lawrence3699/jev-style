@@ -124,3 +124,20 @@ def test_cli_offers_only_published_releases():
     for alias in unpublished:
         with pytest.raises(SystemExit):
             main(["download", "--release", alias])
+
+
+@pytest.mark.parametrize("apple,backend,hint", [(False, "torch", "jev-style[torch]"), (True, "torch", "jev-style[mlx]"),
+                                                (True, "mlx", "jev-style[mlx]")])
+def test_missing_backend_fails_before_download(monkeypatch, apple, backend, hint):
+    monkeypatch.setattr(models, "is_apple_silicon", lambda: apple)
+    monkeypatch.setattr(models, "has_module", lambda name: False)
+    monkeypatch.setattr(models, "download", lambda *a, **k: pytest.fail("downloaded before the backend check"))
+    with pytest.raises(models.MissingBackendError, match=re.escape(hint)):
+        models.load_release(backend)
+
+
+def test_gguf_needs_no_python_extra(monkeypatch, tmp_path):
+    monkeypatch.setattr(models, "has_module", lambda name: False)
+    monkeypatch.setattr(models, "import_runtime", lambda folder, module: _Module)
+    runtime, _, build = models.load_release("gguf", model_dir=tmp_path)
+    assert build.backend == "gguf"

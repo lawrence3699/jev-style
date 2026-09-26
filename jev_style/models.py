@@ -143,6 +143,30 @@ def resolve_backend(backend: str = "auto", release: str | None = None) -> str:
     return "torch" if "torch" in builds else next(iter(builds))
 
 
+class MissingBackendError(ImportError):
+    """The chosen backend's Python packages are not installed (raised before any download)."""
+
+
+_BACKEND_MODULES = {"torch": ("torch", "transformers"), "mlx": ("mlx", "mlx_lm"), "gguf": ()}
+
+
+def require_backend(backend: str) -> None:
+    """Fail fast, before a 1-2 GB download, when the backend's packages are missing."""
+    missing = [m for m in _BACKEND_MODULES.get(backend, ()) if not has_module(m)]
+    if not missing:
+        return
+    if backend == "mlx":
+        hint = 'pip install "jev-style[mlx]"'
+    elif is_apple_silicon():
+        hint = 'pip install "jev-style[mlx]" (Apple silicon), or "jev-style[torch]" for PyTorch'
+    else:
+        hint = 'pip install "jev-style[torch]"'
+    raise MissingBackendError(
+        f"the {backend} backend needs {', '.join(missing)}, which {'is' if len(missing) == 1 else 'are'} not "
+        f"installed. The bare `pip install jev-style` is only the client; to run the model locally: {hint}. The gguf "
+        "backend needs no extra, only the jev-score scorer (see the GGUF model card).")
+
+
 def build_for_repo(repo: str, *, trust_remote_code: bool = False) -> Build:
     """The build a Hub repo id names. Known repos keep their pinned revision; others need trust_remote_code."""
     for r in RELEASES.values():
@@ -209,6 +233,7 @@ def load_release(backend: str = "auto", *, release: str | None = None, model_dir
     else:
         build = get_release(release).builds[resolve_backend(backend, release)]
     backend = build.backend
+    require_backend(backend)
     folder = Path(model_dir).expanduser() if model_dir else download(
         backend, precision=precision, quant=quant, revision=revision, build=build,
         trust_remote_code=trust_remote_code)
