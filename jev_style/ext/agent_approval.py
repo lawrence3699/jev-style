@@ -33,6 +33,7 @@ from typing import Any
 from fastapi import Depends, Request
 from fastapi.concurrency import run_in_threadpool
 
+from jev_style.models import RELEASES
 from jev_style.schema import ApiError, parse_json
 
 ROOT = Path(__file__).resolve().parents[1]              # the jev_style package
@@ -44,7 +45,7 @@ EXAMPLES_FILE = GUARD_DIR / "guard_examples" / "labelled_commands.jsonl"
 # the made-up session every feed item runs in (the labelled examples all use it)
 CONTEXT = {"cwd": "/work/shop-api", "project_dir": "/work/shop-api", "home": "/home/dev"}
 QUESTIONS = ("destructive", "exfiltration", "outside_project", "secrets", "risk")
-MODEL_NAMES = {"jev-style-0.8b-decision-v3": "Jev-Style 0.8B Decision v3",
+MODEL_NAMES = {**{r.model_id: r.title for r in RELEASES.values()},
                "jev-style-fake": "jev-style-fake (fake engine)"}
 MAX_INPUT_CHARS = 20_000
 _TOOL_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")

@@ -31,7 +31,8 @@ e.g. this package's local model, ``jev-style serve`` on another machine, or any 
 
     jev-style eval data.jsonl --server local --server other=http://127.0.0.1:8000 --key other=OTHER_API_KEY
 
-Each spec is ``NAME=URL`` (http/https), ``NAME=local`` or ``NAME=local:mlx`` (in-process, any backend),
+Each spec is ``NAME=URL`` (http/https), ``NAME=local[:release][:backend]`` such as ``local:mlx`` or ``local:2b:mlx``
+(in-process),
 ``NAME=hf:<repo id>`` (in-process, a Jev-Style release by repo id) or ``NAME=fake``; a bare ``local`` or ``fake``
 is its own name. The first engine is the reference. Every engine is scored on the same questions: the ones every
 engine answered (a row an engine rejects, e.g. too long or too many options, is dropped for all and counted).
@@ -358,7 +359,8 @@ def parse_server(spec: str) -> tuple[str, str]:
     if not sep:
         if spec.split(":", 1)[0] in ("local", "fake"):
             return spec, spec
-        raise ValueError(f"--server {spec!r}: expected NAME=URL, NAME=local[:backend], NAME=hf:<repo> or NAME=fake")
+        raise ValueError(f"--server {spec!r}: expected NAME=URL, NAME=local[:release][:backend], NAME=hf:<repo> "
+                         "or NAME=fake")
     if not name or not target:
         raise ValueError(f"--server {spec!r}: empty name or target")
     return name, target
@@ -383,7 +385,15 @@ def build_engine(target: str, backend: str, api_key: str | None = None, model: s
     elif target.startswith("hf:"):
         js = JevStyle.from_pretrained(target[3:])
     elif target.split(":", 1)[0] == "local":
-        js = JevStyle(backend=target.split(":", 1)[1] if ":" in target else backend)
+        kw: dict = {"backend": backend}
+        for part in target.split(":")[1:]:
+            if part in ("auto", "torch", "mlx", "gguf"):
+                kw["backend"] = part
+            elif part:
+                kw["release"] = part
+            else:
+                raise ValueError(f"engine target {target!r}: empty part")
+        js = JevStyle(**kw)
     else:
         raise ValueError(f"unknown engine target {target!r}")
     return lambda state, qs: js.decide(state, qs, model=model)

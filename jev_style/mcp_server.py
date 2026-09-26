@@ -10,7 +10,7 @@ Tools
 
 Backends (pick one)
   --url URL        a running ``jev-style serve`` (default http://127.0.0.1:8765, or $JEV_STYLE_URL)
-  --model          the real model in-process (downloads it once; --backend auto|torch|mlx|gguf)
+  --model          the real model in-process (downloads it once; --backend auto|torch|mlx|gguf, --release)
   --fake           the fake engine in-process (no model; for tests and demos)
 
     jev-style mcp                                   # talks to a running server
@@ -29,6 +29,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
+
+from .models import DEFAULT_RELEASE, release_keys
 
 try:
     from mcp.server.mcpserver import MCPServer
@@ -97,9 +99,9 @@ class HttpBackend:
 
 
 class InProcessBackend:
-    def __init__(self, fake: bool = False, backend: str = "auto"):
+    def __init__(self, fake: bool = False, backend: str = "auto", release: str | None = None):
         from .client import JevStyle
-        self._mj = JevStyle(fake=fake, backend=backend)
+        self._mj = JevStyle(fake=fake, backend=backend, **({} if fake else {"release": release}))
         self.description = "in-process fake engine" if fake else f"in-process model ({backend})"
 
     def decide(self, body: dict) -> dict:
@@ -213,7 +215,7 @@ def make_backend(args: argparse.Namespace) -> Any:
     if args.fake:
         return InProcessBackend(fake=True)
     if args.model:
-        return InProcessBackend(backend=args.backend)
+        return InProcessBackend(backend=args.backend, release=args.release)
     url = args.url or os.environ.get("JEV_STYLE_URL") or DEFAULT_URL
     return HttpBackend(url, api_key=os.environ.get(args.api_key_env) if args.api_key_env else None,
                        timeout=args.timeout, allow_remote=args.allow_remote)
@@ -226,6 +228,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     src.add_argument("--model", action="store_true", help="load the real model in-process")
     src.add_argument("--fake", action="store_true", help="in-process fake engine, no model")
     ap.add_argument("--backend", default="auto", choices=("auto", "torch", "mlx", "gguf"))
+    ap.add_argument("--release", default=os.environ.get("JEV_STYLE_RELEASE", DEFAULT_RELEASE), choices=release_keys(),
+                    help="which model --model loads")
     ap.add_argument("--api-key-env", default="JEV_STYLE_API_KEY", help="env var holding the server's bearer key")
     ap.add_argument("--timeout", type=float, default=120.0)
     ap.add_argument("--allow-remote", action="store_true", help="allow a non-loopback --url")

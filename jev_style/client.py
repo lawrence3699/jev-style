@@ -3,6 +3,7 @@
     from jev_style import JevStyle, noul, choice, score
     js = JevStyle(fake=True)                             # in-process fake engine (no model)
     js = JevStyle(backend="auto")                        # in-process real model (downloads it once)
+    js = JevStyle(release="2b")                          # another release (see jev_style.models.RELEASES)
     js = JevStyle.from_pretrained("chaoliangUNSW/Jev-Style-0.8B-Decision-v3-GGUF")   # pick the build by repo id
     js = JevStyle(base_url="http://127.0.0.1:8765")      # over HTTP: jev-style serve, or another server
                                                          # that implements POST /v1/systemone
@@ -150,7 +151,8 @@ def default_client() -> JevStyle:
         if _default is None:
             url = os.environ.get("JEV_STYLE_URL")
             backend = os.environ.get("JEV_STYLE_BACKEND", "auto")
-            _default = JevStyle(base_url=url) if url else JevStyle(backend=backend)
+            _default = JevStyle(base_url=url) if url else JevStyle(backend=backend,
+                                                                   release=os.environ.get("JEV_STYLE_RELEASE"))
         return _default
 
 

@@ -5,18 +5,21 @@ input rendering, verdict readout, calibration temperatures and token budgets all
 module only picks a build, downloads a pinned revision and imports that runtime, so the server gives
 exactly the answers the model card documents.
 
+Releases (``--release`` / ``JevStyle(release=...)``; default ``0.8b-v3``), each with three builds:
+
+* ``0.8b-v3``  chaoliangUNSW/Jev-Style-0.8B-Decision-v3[-MLX|-GGUF]
+* ``2b-v3``    chaoliangUNSW/Jev-Style-2B-Decision-v3[-MLX|-GGUF]   (listed once its revisions are pinned)
+
 Backends:
 
-* ``torch``  chaoliangUNSW/Jev-Style-0.8B-Decision-v3        CUDA, Apple MPS or CPU (float32 by default)
-* ``mlx``    chaoliangUNSW/Jev-Style-0.8B-Decision-v3-MLX    Apple silicon, bf16 or 8-bit weights
-* ``gguf``   chaoliangUNSW/Jev-Style-0.8B-Decision-v3-GGUF   llama.cpp via the ``jev-score`` scorer
-                                                             (build it once, see the GGUF model card)
+* ``torch``  the main repo                 CUDA, Apple MPS or CPU (float32 by default)
+* ``mlx``    the ``-MLX`` repo             Apple silicon, bf16 or 8-bit weights
+* ``gguf``   the ``-GGUF`` repo            llama.cpp via the ``jev-score`` scorer (build it once, see the GGUF card)
 
-``auto`` = mlx on Apple silicon when ``mlx`` + ``mlx-lm`` are installed, otherwise torch.
-
-``build_for_repo`` maps a Hub repo id to its build (``JevStyle.from_pretrained``). The three repos above load at
-their pinned revisions. Any other repo runs the ``jev_style_decision*.py`` file it ships, so it is refused
-unless the caller passes ``trust_remote_code=True``.
+``auto`` = mlx on Apple silicon when ``mlx`` + ``mlx-lm`` are installed, otherwise torch (or whatever the release
+ships). ``build_for_repo`` maps a Hub repo id to its build (``JevStyle.from_pretrained``). Known repos load at their
+pinned revisions. Any other repo runs the ``jev_style_decision*.py`` file it ships, so it is refused unless the
+caller passes ``trust_remote_code=True``; the same flag lets a release that is not pinned yet load from ``main``.
 """
 from __future__ import annotations
 
@@ -29,8 +32,6 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-MODEL_ID = "jev-style-0.8b-decision-v3"
-MODEL_NAME = "Jev-Style-0.8B-Decision-v3"
 BACKENDS = ("auto", "torch", "mlx", "gguf")
 
 
@@ -43,23 +44,82 @@ class Build:
     cls: str
     patterns: tuple[str, ...]
     extra: dict[str, Any] = field(default_factory=dict)
+    release: str = "0.8b-v3"
+
+
+@dataclass(frozen=True)
+class Release:
+    key: str                    # "0.8b-v3"
+    model_id: str               # what the server reports: "jev-style-0.8b-decision-v3"
+    name: str                   # Hub name: "Jev-Style-0.8B-Decision-v3"
+    title: str                  # for people: "Jev-Style 0.8B Decision v3"
+    release_date: str | None
+    builds: dict[str, Build]
+
+    @property
+    def published(self) -> bool:
+        """Every build pinned to a revision: only then do the CLI and ``auto`` offer it."""
+        return all(b.revision for b in self.builds.values())
 
 
 _COMMON = ("LICENSE", "NOTICE", "manifest.json", "readout_config.json", "release_config.json", "requirements.txt")
+_TORCH_FILES = ("jev_style_decision.py", "config.json", "generation_config.json", "chat_template.jinja",
+                "tokenizer.json", "tokenizer_config.json")
 
-BUILDS: dict[str, Build] = {
-    "torch": Build("torch", "chaoliangUNSW/Jev-Style-0.8B-Decision-v3", "d53c8f826f35e811d06529f5c1066dfd60eee00c",
-                   "jev_style_decision", "JevStyleDecision",
-                   _COMMON + ("jev_style_decision.py", "config.json", "generation_config.json", "chat_template.jinja",
-                              "model.safetensors", "tokenizer.json", "tokenizer_config.json")),
-    "mlx": Build("mlx", "chaoliangUNSW/Jev-Style-0.8B-Decision-v3-MLX", "7f14c9fa1491d168a7f70b16acf68baf9d4f7353",
-                 "jev_style_decision_mlx", "JevStyleDecisionMLX",
-                 _COMMON + ("jev_style_decision_mlx.py",), {"precision_patterns": "{precision}/*"}),
-    "gguf": Build("gguf", "chaoliangUNSW/Jev-Style-0.8B-Decision-v3-GGUF", "b8356a83beb560cf34cbe6f9a20c2076e1b532d3",
-                  "jev_style_decision_gguf", "JevStyleDecisionGGUF",
-                  _COMMON + ("jev_style_decision_gguf.py", "jev_score.cpp", "build_jev_score.sh", "tokenizer/*"),
-                  {"quant_file": MODEL_NAME + "-{quant}.gguf"}),
+
+def _release(key: str, name: str, title: str, model_id: str, release_date: str | None,
+             revisions: dict[str, str | None], torch_weights: tuple[str, ...],
+             mlx_prefix_sharing: bool) -> Release:
+    repo = "chaoliangUNSW/" + name
+    builds = {
+        "torch": Build("torch", repo, revisions["torch"], "jev_style_decision", "JevStyleDecision",
+                       _COMMON + _TORCH_FILES + torch_weights, release=key),
+        "mlx": Build("mlx", repo + "-MLX", revisions["mlx"], "jev_style_decision_mlx", "JevStyleDecisionMLX",
+                     _COMMON + ("jev_style_decision_mlx.py",),
+                     {"precision_patterns": "{precision}/*", "prefix_sharing": mlx_prefix_sharing}, release=key),
+        "gguf": Build("gguf", repo + "-GGUF", revisions["gguf"], "jev_style_decision_gguf", "JevStyleDecisionGGUF",
+                      _COMMON + ("jev_style_decision_gguf.py", "jev_score.cpp", "build_jev_score.sh", "tokenizer/*"),
+                      {"quant_file": name + "-{quant}.gguf"}, release=key),
+    }
+    return Release(key, model_id, name, title, release_date, builds)
+
+
+RELEASES: dict[str, Release] = {
+    "0.8b-v3": _release(
+        "0.8b-v3", "Jev-Style-0.8B-Decision-v3", "Jev-Style 0.8B Decision v3", "jev-style-0.8b-decision-v3",
+        "2026-09-24",
+        {"torch": "d53c8f826f35e811d06529f5c1066dfd60eee00c", "mlx": "7f14c9fa1491d168a7f70b16acf68baf9d4f7353",
+         "gguf": "b8356a83beb560cf34cbe6f9a20c2076e1b532d3"},
+        ("model.safetensors",), mlx_prefix_sharing=True),
+    # TODO(0.3.0): pin the three revisions and the release date once the 2B repos are on the Hub, and check the
+    # file names below against them (sharded safetensors, MLX precision folders, GGUF file names, runtime modules).
+    # Prefix sharing stays off until it is shown bit-identical on the 2B MLX runtime (block attention).
+    "2b-v3": _release(
+        "2b-v3", "Jev-Style-2B-Decision-v3", "Jev-Style 2B Decision v3", "jev-style-2b-decision-v3",
+        None, {"torch": None, "mlx": None, "gguf": None},
+        ("*.safetensors", "model.safetensors.index.json"), mlx_prefix_sharing=False),
 }
+ALIASES = {"0.8b": "0.8b-v3", "2b": "2b-v3"}
+DEFAULT_RELEASE = "0.8b-v3"
+
+# the default release, under the names 0.2.x exported
+BUILDS: dict[str, Build] = RELEASES[DEFAULT_RELEASE].builds
+MODEL_ID = RELEASES[DEFAULT_RELEASE].model_id
+MODEL_NAME = RELEASES[DEFAULT_RELEASE].name
+
+
+def release_keys(published_only: bool = True) -> list[str]:
+    """Release keys and their short aliases, e.g. for ``--release`` choices."""
+    keys = [k for k, r in RELEASES.items() if r.published or not published_only]
+    return keys + [a for a, k in ALIASES.items() if k in keys]
+
+
+def get_release(key: str | None = None) -> Release:
+    key = key or os.environ.get("JEV_STYLE_RELEASE") or DEFAULT_RELEASE
+    key = ALIASES.get(key.lower(), key.lower())
+    if key not in RELEASES:
+        raise ValueError(f"unknown release {key!r}; known: {', '.join(release_keys(published_only=False))}")
+    return RELEASES[key]
 
 
 def is_apple_silicon() -> bool:
@@ -70,28 +130,32 @@ def has_module(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
 
 
-def resolve_backend(backend: str = "auto") -> str:
+def resolve_backend(backend: str = "auto", release: str | None = None) -> str:
     if backend not in BACKENDS:
         raise ValueError(f"backend must be one of {BACKENDS}, got {backend!r}")
+    builds = get_release(release).builds
     if backend != "auto":
+        if backend not in builds:
+            raise ValueError(f"release {get_release(release).key} has no {backend} build")
         return backend
-    if is_apple_silicon() and has_module("mlx") and has_module("mlx_lm"):
+    if "mlx" in builds and is_apple_silicon() and has_module("mlx") and has_module("mlx_lm"):
         return "mlx"
-    return "torch"
+    return "torch" if "torch" in builds else next(iter(builds))
 
 
 def build_for_repo(repo: str, *, trust_remote_code: bool = False) -> Build:
     """The build a Hub repo id names. Known repos keep their pinned revision; others need trust_remote_code."""
-    for b in BUILDS.values():
-        if b.repo.lower() == repo.lower():
-            return b
+    for r in RELEASES.values():
+        for b in r.builds.values():
+            if b.repo.lower() == repo.lower():
+                return b
     if not trust_remote_code:
-        known = ", ".join(b.repo for b in BUILDS.values())
+        known = ", ".join(b.repo for r in RELEASES.values() if r.published for b in r.builds.values())
         raise ValueError(f"{repo!r} is not a Jev-Style release this package knows ({known}). Loading it runs the "
                          "Python runtime file it ships; pass trust_remote_code=True if you trust it.")
     tail = repo.rsplit("/", 1)[-1].lower()
     backend = "gguf" if "gguf" in tail else "mlx" if "mlx" in tail else "torch"
-    return replace(BUILDS[backend], repo=repo, revision=None)
+    return replace(BUILDS[backend], repo=repo, revision=None, release="custom")
 
 
 def patterns_for(build: Build, precision: str = "bf16", quant: str = "Q8_0") -> list[str]:
@@ -104,11 +168,16 @@ def patterns_for(build: Build, precision: str = "bf16", quant: str = "Q8_0") -> 
 
 
 def download(backend: str = "auto", *, precision: str = "bf16", quant: str = "Q8_0",
-             revision: str | None = None, build: Build | None = None) -> Path:
+             revision: str | None = None, build: Build | None = None, release: str | None = None,
+             trust_remote_code: bool = False) -> Path:
     """Download (or reuse from the HF cache) the files one backend needs. Returns the local folder."""
     from huggingface_hub import snapshot_download
 
-    build = build or BUILDS[resolve_backend(backend)]
+    build = build or get_release(release).builds[resolve_backend(backend, release)]
+    if not (revision or build.revision) and not trust_remote_code:
+        raise ValueError(f"{build.repo} has no pinned revision in jev-style {_version()} (release "
+                         f"{build.release} is not published in this version). Upgrade jev-style, pass a local "
+                         "model_dir, or pass trust_remote_code=True to load the repo's main branch.")
     kw = dict(revision=revision or build.revision, allow_patterns=patterns_for(build, precision, quant))
     try:                                   # pinned revision already cached: no network round trip
         return Path(snapshot_download(build.repo, local_files_only=True, **kw))
@@ -129,26 +198,38 @@ def import_runtime(model_dir: Path, module: str) -> ModuleType:
     return mod
 
 
-def load(backend: str = "auto", *, model_dir: str | Path | None = None, device: str | None = None,
-         dtype: str = "float32", precision: str = "bf16", quant: str = "Q8_0", scorer: str | None = None,
-         revision: str | None = None, verify: bool = False, repo: str | None = None,
-         trust_remote_code: bool = False) -> tuple[Any, ModuleType, str]:
-    """-> (runtime object, runtime module, backend name). ``model_dir`` skips the download; ``repo`` picks the
-    build (and so the backend) from a Hub repo id instead of ``backend``."""
+def load_release(backend: str = "auto", *, release: str | None = None, model_dir: str | Path | None = None,
+                 device: str | None = None, dtype: str = "float32", precision: str = "bf16", quant: str = "Q8_0",
+                 scorer: str | None = None, revision: str | None = None, verify: bool = False,
+                 repo: str | None = None, trust_remote_code: bool = False) -> tuple[Any, ModuleType, Build]:
+    """-> (runtime object, runtime module, build). ``model_dir`` skips the download; ``repo`` picks the build (and
+    so the release and backend) from a Hub repo id instead of ``release`` and ``backend``."""
     if repo:
         build = build_for_repo(repo, trust_remote_code=trust_remote_code)
-        backend = build.backend
     else:
-        backend = resolve_backend(backend)
-        build = BUILDS[backend]
-    folder = Path(model_dir).expanduser() if model_dir else download(backend, precision=precision, quant=quant,
-                                                                     revision=revision, build=build)
+        build = get_release(release).builds[resolve_backend(backend, release)]
+    backend = build.backend
+    folder = Path(model_dir).expanduser() if model_dir else download(
+        backend, precision=precision, quant=quant, revision=revision, build=build,
+        trust_remote_code=trust_remote_code)
     rt = import_runtime(folder, build.module)
     cls = getattr(rt, build.cls)
     if backend == "torch":
-        runtime = cls(folder, device=device or os.environ.get("JEV_STYLE_DEVICE") or os.environ.get("JEV_DEVICE") or None, dtype=dtype, verify=verify)
+        device = device or os.environ.get("JEV_STYLE_DEVICE") or os.environ.get("JEV_DEVICE") or None
+        runtime = cls(folder, device=device, dtype=dtype, verify=verify)
     elif backend == "mlx":
         runtime = cls(folder, precision=precision, verify=verify)
     else:
         runtime = cls(folder, quant=quant.upper(), binary=scorer, verify=verify)
-    return runtime, rt, backend
+    return runtime, rt, build
+
+
+def load(backend: str = "auto", **kw: Any) -> tuple[Any, ModuleType, str]:
+    """-> (runtime object, runtime module, backend name); see ``load_release``."""
+    runtime, rt, build = load_release(backend, **kw)
+    return runtime, rt, build.backend
+
+
+def _version() -> str:
+    from . import __version__
+    return __version__

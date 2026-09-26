@@ -19,7 +19,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from .models import MODEL_ID
+from .models import MODEL_ID, RELEASES
 from .schema import ApiError, ParsedRequest, QuestionSpec, parse_request
 
 DEFAULT_CATEGORY = "typed_official"      # calibration group the model card uses for free-form typed questions
@@ -52,10 +52,11 @@ class Adapter:
 
     def __init__(self, runtime: Any, rt: Any, backend: str, model_id: str = MODEL_ID,
                  category: str | None = DEFAULT_CATEGORY, description: str | None = None,
-                 worker: ThreadPoolExecutor | None = None):
+                 worker: ThreadPoolExecutor | None = None, release_date: str | None = None):
         self.runtime, self.rt = runtime, rt
         self.worker = worker or model_thread()
         self.model_id = model_id
+        self.release_date = release_date
         self.category = category
         self._backend = backend
         self.description = description or "Jev-Style 0.8B Decision v3: local typed decisions (noul / choice / score)"
@@ -114,7 +115,8 @@ class Adapter:
                  "backend": self.backend}
         return {"object": "list", "data": [entry],
                 # the shape the public systemone SDKs read from GET /v1/models
-                "models": [{"name": self.model_id, "release_date": "2026-09-24", "description": self.description}]}
+                "models": [{"name": self.model_id, "release_date": self.release_date,
+                            "description": self.description}]}
 
     def release_info(self) -> dict:
         fake = self.model_id.endswith("fake")
@@ -127,9 +129,13 @@ def build_adapter(backend: str = "auto", *, fake: bool = False, **load_kw: Any) 
         from . import fake as fk
         return Adapter(fk.FakeRuntime(), fk, "fake", fk.FAKE_MODEL_ID,
                        description="Fake engine: deterministic hash-based probabilities, no model")
-    from .models import load
+    from .models import load_release
     worker = model_thread()
-    runtime, rt, name = worker.submit(load, backend, **load_kw).result()
-    from .fastpath import enable_prefix_sharing
-    enable_prefix_sharing(runtime, rt)          # MLX: read the state once for many questions (same scores)
-    return Adapter(runtime, rt, name, worker=worker)
+    runtime, rt, build = worker.submit(load_release, backend, **load_kw).result()
+    if build.extra.get("prefix_sharing"):       # only where it was shown to give the same scores
+        from .fastpath import enable_prefix_sharing
+        enable_prefix_sharing(runtime, rt)      # MLX: read the state once for many questions
+    rel = RELEASES.get(build.release)            # None for a repo loaded with trust_remote_code
+    return Adapter(runtime, rt, build.backend, rel.model_id if rel else build.repo, worker=worker,
+                   release_date=rel.release_date if rel else None,
+                   description=f"{rel.title if rel else build.repo}: local typed decisions (noul / choice / score)")

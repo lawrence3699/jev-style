@@ -3,7 +3,20 @@
 Versions follow [semantic versioning](https://semver.org/). Each release pins the model revisions it loads
 (`jev_style/models.py`), so upgrading the package is what changes the weights you get.
 
-## 0.2.0 (unreleased)
+## 0.3.0 (unreleased)
+
+- **Several model releases.** `jev_style.models.RELEASES` lists each release with its three builds (PyTorch main repo,
+  `-MLX`, `-GGUF`). Pick one with `--release` (`serve`, `decide`, `download`, `mcp`), `JevStyle(release=...)`,
+  `$JEV_STYLE_RELEASE`, an eval engine `local:<release>[:backend]`, or `JevStyle.from_pretrained(<any of its repos>)`.
+  The default stays `0.8b-v3`. Only releases whose builds are all pinned are offered by the CLI.
+- The server reports the loaded release: `model` in answers, `/v1/models` and `/healthz` (id, release date,
+  description) come from the release instead of being fixed to the 0.8B model.
+- MLX prefix sharing is enabled per build, only where it was shown to give identical scores (0.8B v3 MLX).
+- A release that is not pinned yet can still be loaded from a local folder (`model_dir`), or from its main branch
+  with `trust_remote_code=True`.
+- `models.load_release()` returns the build as well; `models.load()` keeps its 0.2 return value.
+
+## 0.2.0 (2026-09-26)
 
 - **On PyPI.** `pip install "jev-style[mlx]"` on Apple silicon, `pip install "jev-style[torch]"` elsewhere; the
   README and the skills no longer install from a git URL.

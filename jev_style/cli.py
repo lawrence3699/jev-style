@@ -18,12 +18,18 @@ import sys
 from typing import Any
 
 from . import __version__
-from .models import BACKENDS
+from .models import BACKENDS, DEFAULT_RELEASE, release_keys
 
 DEFAULT_PORT = 8765
 
 
+def _release_arg(ap: argparse.ArgumentParser) -> None:
+    ap.add_argument("--release", default=os.environ.get("JEV_STYLE_RELEASE", DEFAULT_RELEASE), choices=release_keys(),
+                    help=f"which model to load (default $JEV_STYLE_RELEASE or {DEFAULT_RELEASE})")
+
+
 def _model_args(ap: argparse.ArgumentParser) -> None:
+    _release_arg(ap)
     ap.add_argument("--backend", default=os.environ.get("JEV_STYLE_BACKEND", "auto"), choices=BACKENDS,
                     help="auto = mlx on Apple silicon when installed, else torch ($JEV_STYLE_BACKEND)")
     ap.add_argument("--model-dir", default=os.environ.get("JEV_STYLE_MODEL_DIR"),
@@ -38,8 +44,8 @@ def _model_args(ap: argparse.ArgumentParser) -> None:
 
 
 def _load_kw(args: argparse.Namespace) -> dict[str, Any]:
-    return {"model_dir": args.model_dir, "device": args.device, "dtype": args.dtype, "precision": args.precision,
-            "quant": args.quant, "scorer": args.scorer}
+    return {"release": args.release, "model_dir": args.model_dir, "device": args.device, "dtype": args.dtype,
+            "precision": args.precision, "quant": args.quant, "scorer": args.scorer}
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
@@ -65,7 +71,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 def cmd_download(args: argparse.Namespace) -> int:
     from .models import download
-    print(download(args.backend, precision=args.precision, quant=args.quant))
+    print(download(args.backend, precision=args.precision, quant=args.quant, release=args.release))
     return 0
 
 
@@ -140,6 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     s.set_defaults(func=cmd_serve)
 
     d = sub.add_parser("download", help="download the weights for a backend")
+    _release_arg(d)
     d.add_argument("--backend", default=os.environ.get("JEV_STYLE_BACKEND", "auto"), choices=BACKENDS)
     d.add_argument("--precision", default="bf16", choices=("bf16", "8bit"))
     d.add_argument("--quant", default="Q8_0", choices=("F16", "Q8_0", "Q4_K_M"))
