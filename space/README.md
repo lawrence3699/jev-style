@@ -32,7 +32,7 @@ Runs the model repo's own PyTorch runtime (float32) on ZeroGPU. Other builds:
 [GGUF](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3-GGUF) (0.53 GB in 4-bit) ·
 [MLX](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3-MLX). Website: [jevstyle.com](https://jevstyle.com).
 
-**Run it on your own machine:** `pip install jev-style` ([PyPI](https://pypi.org/project/jev-style/)), then `jev-style serve` for a local API,
+**Run it on your own machine:** `pip install "jev-style[torch]"` (`[mlx]` on Apple silicon; [PyPI](https://pypi.org/project/jev-style/)), then `jev-style serve` for a local API,
 Playground, agent skills, Claude Code guard and MCP tools: [github.com/lawrence3699/jev-style](https://github.com/lawrence3699/jev-style).
 
 The 19K-token example is public-domain text (U.S. founding documents, Project Gutenberg eBooks 1, 5, 2 and 1404).

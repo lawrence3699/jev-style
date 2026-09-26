@@ -243,7 +243,7 @@ with gr.Blocks(title="Jev-Style v3", analytics_enabled=False, elem_classes="wrap
                 example_labels=[e[0] for e in EXAMPLES], cache_examples=True, cache_mode="eager",
                 examples_per_page=len(EXAMPLES))
     gr.Markdown(f"[Model]({HF}{REPO}) · [GGUF]({HF}{REPO}-GGUF) · [MLX]({HF}{REPO}-MLX) · "
-                "[GitHub](https://github.com/lawrence3699/jev-style) (`pip install jev-style`) · [jevstyle.com](https://jevstyle.com) · "
+                "[GitHub](https://github.com/lawrence3699/jev-style) (`pip install \"jev-style[torch]\"`) · [jevstyle.com](https://jevstyle.com) · "
                 "Not affiliated with TypeSafe, Jev or Laya.",
                 elem_classes="foot")
 
