@@ -43,7 +43,7 @@ curl -s http://127.0.0.1:8765/v1/systemone -H 'content-type: application/json' -
   }}'
 ```
 
-Python (`pip install "jev-style @ git+https://github.com/lawrence3699/jev-style"`, or just `httpx`/`requests`):
+Python (`pip install "jev-style"`, or just `httpx`/`requests`):
 
 ```python
 from jev_style import JevStyle, noul, choice, score

@@ -26,13 +26,13 @@ Prefer `uv` (installs into its own environment, puts `jev-style` on PATH):
 
 ```sh
 # Apple silicon (MLX backend, fastest on a Mac) + PyTorch fallback + MCP server:
-uv tool install "jev-style[all] @ git+https://github.com/lawrence3699/jev-style"
+uv tool install "jev-style[all]"
 # Linux / Windows / Intel Mac (PyTorch on CUDA or CPU) + MCP server:
-uv tool install "jev-style[torch,mcp] @ git+https://github.com/lawrence3699/jev-style"
+uv tool install "jev-style[torch,mcp]"
 ```
 
 No `uv`? Install it (`curl -LsSf https://astral.sh/uv/install.sh | sh`, ask first) or use
-`pip install "jev-style[all] @ git+https://github.com/lawrence3699/jev-style"` inside a venv.
+`pip install "jev-style[all]"` inside a venv.
 Needs Python 3.10+.
 
 ## 3. Pick the backend

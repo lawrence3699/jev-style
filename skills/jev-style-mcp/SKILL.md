@@ -26,7 +26,7 @@ curl -s http://127.0.0.1:8765/healthz || echo "server not running"
 ```
 
 If `jev-style mcp --help` fails with "needs the 'mcp' extra", reinstall with the extra:
-`uv tool install --force "jev-style[all] @ git+https://github.com/lawrence3699/jev-style"`.
+`uv tool install --force "jev-style[all]"`.
 If the server is not running, start it (`jev-style serve`, see the `jev-style-serve` skill). Without a
 server you can use `jev-style mcp --model` (loads the model inside the MCP process; each client then
 holds its own copy) - prefer the shared server.

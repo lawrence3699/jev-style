@@ -3,6 +3,7 @@
 Small, calibrated decision models you run on your own machine, plus the tooling to put them to work in AI agents.
 
 <p>
+  <a href="https://pypi.org/project/jev-style/"><img alt="PyPI" src="https://img.shields.io/pypi/v/jev-style?style=for-the-badge&labelColor=000000&color=0a0a0a" height="28"></a>
   <a href="https://github.com/lawrence3699/jev-style/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/lawrence3699/jev-style/ci.yml?style=for-the-badge&labelColor=000000" height="28"></a>
   <a href="https://huggingface.co/collections/chaoliangUNSW/jev-style-08b-decision-v3-6ab58abb90ae4b7b55578b3e"><img alt="Weights: 0.8B · torch · MLX · GGUF" src="https://img.shields.io/badge/WEIGHTS-0.8B%20%C2%B7%20torch%20%C2%B7%20MLX%20%C2%B7%20GGUF-0a0a0a.svg?style=for-the-badge&labelColor=000000" height="28"></a>
   <a href="https://huggingface.co/spaces/chaoliangUNSW/jev-style-v3"><img alt="Demo on Hugging Face Spaces" src="https://img.shields.io/badge/DEMO-HF%20Spaces-0a0a0a.svg?style=for-the-badge&labelColor=000000" height="28"></a>
@@ -10,7 +11,7 @@ Small, calibrated decision models you run on your own machine, plus the tooling 
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-0a0a0a.svg?style=for-the-badge&labelColor=000000" height="28"></a>
 </p>
 
-![The Playground answering a support-ticket request, then the agent-approval demo allowing, asking about and denying tool calls](docs/demo.gif)
+![The Playground answering a support-ticket request, then the agent-approval demo allowing, asking about and denying tool calls](https://raw.githubusercontent.com/lawrence3699/jev-style/main/docs/demo.gif)
 
 Jev-Style is a family of small decision models built on Qwen3.5. The current model, [Jev-Style-0.8B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3), is 0.53 GB at 4-bit. You give it text or JSON and some typed questions, and it returns a calibrated probability for every option in one forward pass. The server's API follows the public systemone request shape, so clients written for Jev-compatible servers can call your laptop instead.
 
@@ -58,16 +59,16 @@ The [Hugging Face Space](https://huggingface.co/spaces/chaoliangUNSW/jev-style-v
 
 ### Run it locally
 
-You'll need Python 3.10 or newer and [uv](https://docs.astral.sh/uv/).
+You'll need Python 3.10 or newer.
 
 ```bash
-# Apple silicon (MLX), with PyTorch as a fallback and the MCP server:
-uv tool install "jev-style[all] @ git+https://github.com/lawrence3699/jev-style"
-# Linux, Windows or an Intel Mac (PyTorch on CUDA or CPU) and the MCP server:
-uv tool install "jev-style[torch,mcp] @ git+https://github.com/lawrence3699/jev-style"
+pip install "jev-style[mlx]"      # Apple silicon (MLX)
+pip install "jev-style[torch]"    # Linux, Windows or an Intel Mac (PyTorch on CUDA or CPU)
 
 jev-style serve          # downloads the model once (~1.5 GB), then serves http://127.0.0.1:8765
 ```
+
+To install the command line tool on its own, with the MCP server, use [uv](https://docs.astral.sh/uv/): `uv tool install "jev-style[all]"` on Apple silicon, `uv tool install "jev-style[torch,mcp]"` elsewhere.
 
 Open http://127.0.0.1:8765 for the Playground and the demos: agent action approval, Snake, and Chinese and 51 languages. In another terminal, send a ticket:
 
@@ -108,10 +109,22 @@ The ticket raises both a billing problem and a late delivery, and the probabilit
 
 ### Use it from Python
 
+For a script, one line is enough. The first call loads the model in-process, or uses the server in `JEV_STYLE_URL` if you set it:
+
+```python
+import jev_style
+
+jev_style.classify("Where is my parcel? It was due Monday.", ["billing", "shipping", "tech"])
+# {'label': 'shipping', 'confidence': ..., 'probabilities': {'billing': ..., 'shipping': ..., 'tech': ...}}
+```
+
+For several questions about one text, and to choose the engine yourself:
+
 ```python
 from jev_style import JevStyle, choice, noul, score
 
-js = JevStyle(base_url="http://127.0.0.1:8765")   # or JevStyle() to load the model in-process
+js = JevStyle.from_pretrained("chaoliangUNSW/Jev-Style-0.8B-Decision-v3-MLX")   # in-process; the repo picks the backend
+# js = JevStyle(base_url="http://127.0.0.1:8765")                                # or a running server
 out = js.decide("I was charged twice. Please fix this ASAP.", {
     "billing": noul("This ticket is about billing."),
     "tone":    choice("What is the customer's tone?", ["calm", "frustrated", "angry"]),
@@ -120,7 +133,7 @@ out = js.decide("I was charged twice. Please fix this ASAP.", {
 print(out["answers"]["billing"]["noul"], out["answers"]["tone"]["choice"])
 ```
 
-A client for another systemone-compatible server also works: point its base URL at `http://127.0.0.1:8765` and pass any API key string.
+`from_pretrained` takes the main repo (PyTorch), `-MLX` (`precision="8bit"` for the 0.8 GB weights) or `-GGUF` (`quant="Q4_K_M"`, needs the `jev-score` scorer, see [Backends](#backends)). The client is not tied to this model: `JevStyle(base_url=...)` works with any server that implements `POST /v1/systemone`, and a client written for another systemone-compatible server can call `http://127.0.0.1:8765` with any API key string.
 
 ### From the shell
 
@@ -132,7 +145,7 @@ jev-style decide "Refund still missing after 3 weeks" --url http://127.0.0.1:876
 
 ## Agent Skills
 
-The skills live in [`skills/`](skills/). Each one tells a coding agent how to do one job from start to finish, and ends with a check that the job worked.
+The skills live in [`skills/`](https://github.com/lawrence3699/jev-style/tree/main/skills). Each one tells a coding agent how to do one job from start to finish, and ends with a check that the job worked.
 
 ```bash
 npx skills add lawrence3699/jev-style                    # pick skills interactively
@@ -141,12 +154,12 @@ npx skills add lawrence3699/jev-style --skill '*' -y     # all six
 
 | Skill | What your agent does with it |
 |---|---|
-| [`jev-style-serve`](skills/jev-style-serve/SKILL.md) | Installs the CLI, picks the backend for your machine, starts the server, checks it with a real request, and can optionally start it at login. |
-| [`jev-style`](skills/jev-style/SKILL.md) | Writes code that calls the model: request format, reading the probabilities, turning them into actions with thresholds, limits. |
-| [`jev-style-eval`](skills/jev-style-eval/SKILL.md) | Builds a labelled JSONL from your data and runs `jev-style eval`. It reports accuracy, Brier, ECE, how much you can automate at a 1, 5 or 10 % error budget, and a refitted temperature. |
-| [`jev-style-adopt`](skills/jev-style-adopt/SKILL.md) | Scans your code for LLM calls that only return a label, yes/no or a rating, and rewrites them as typed questions. The LLM stays as the fallback below a confidence threshold. It runs in shadow mode, measures agreement, then switches. |
-| [`jev-style-guard`](skills/jev-style-guard/SKILL.md) | Installs the Claude Code guard hook. It recommends a dry run first, then shows how to tune thresholds and measure them on labelled calls. |
-| [`jev-style-mcp`](skills/jev-style-mcp/SKILL.md) | Registers the MCP tools with Claude Code, Codex, Cursor, Claude Desktop or Windsurf, and checks that a tool call works. |
+| [`jev-style-serve`](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style-serve/SKILL.md) | Installs the CLI, picks the backend for your machine, starts the server, checks it with a real request, and can optionally start it at login. |
+| [`jev-style`](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style/SKILL.md) | Writes code that calls the model: request format, reading the probabilities, turning them into actions with thresholds, limits. |
+| [`jev-style-eval`](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style-eval/SKILL.md) | Builds a labelled JSONL from your data and runs `jev-style eval`. It reports accuracy, Brier, ECE, how much you can automate at a 1, 5 or 10 % error budget, and a refitted temperature. |
+| [`jev-style-adopt`](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style-adopt/SKILL.md) | Scans your code for LLM calls that only return a label, yes/no or a rating, and rewrites them as typed questions. The LLM stays as the fallback below a confidence threshold. It runs in shadow mode, measures agreement, then switches. |
+| [`jev-style-guard`](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style-guard/SKILL.md) | Installs the Claude Code guard hook. It recommends a dry run first, then shows how to tune thresholds and measure them on labelled calls. |
+| [`jev-style-mcp`](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style-mcp/SKILL.md) | Registers the MCP tools with Claude Code, Codex, Cursor, Claude Desktop or Windsurf, and checks that a tool call works. |
 
 In Claude Code you can also install everything as plugins:
 
@@ -166,7 +179,7 @@ jev-style guard --check "git push --force origin main"
 jev-style guard-replay --url http://127.0.0.1:8765     # the 49 bundled labelled tool calls
 ```
 
-On the 49 bundled tool calls, which were written and labelled by hand, the default config agrees with the labels on **77.6 %**. **No call labelled deny was allowed.** 2 of the 16 calls labelled ask were allowed. The model alone, with no hard rules, agrees on 61.2 %. Use it as a second line of defence, not as a sandbox. The [skill](skills/jev-style-guard/SKILL.md) covers installing, dry runs and tuning.
+On the 49 bundled tool calls, which were written and labelled by hand, the default config agrees with the labels on **77.6 %**. **No call labelled deny was allowed.** 2 of the 16 calls labelled ask were allowed. The model alone, with no hard rules, agrees on 61.2 %. Use it as a second line of defence, not as a sandbox. The [skill](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style-guard/SKILL.md) covers installing, dry runs and tuning.
 
 ## MCP Server
 
@@ -174,7 +187,7 @@ On the 49 bundled tool calls, which were written and labelled by hand, the defau
 claude mcp add jev-style --scope user -- jev-style mcp       # Claude Code
 ```
 
-`jev-style mcp` is a thin stdio server that forwards to the running `jev-style serve`, so one copy of the model serves every client. It provides `decide` (several questions about one input), `noul`, `choice`, `score` and `model_info`. Setup for Codex, Cursor and Claude Desktop is in [the skill](skills/jev-style-mcp/SKILL.md).
+`jev-style mcp` is a thin stdio server that forwards to the running `jev-style serve`, so one copy of the model serves every client. It provides `decide` (several questions about one input), `noul`, `choice`, `score` and `model_info`. Setup for Codex, Cursor and Claude Desktop is in [the skill](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style-mcp/SKILL.md).
 
 ## Evaluate on Your Own Data
 
@@ -191,7 +204,28 @@ escalate                  30   96.7%   0.107  0.125    80.0% (p>=0.71) / 100.0% 
 mood                      30   73.3%   0.433  0.174    40.0% (p>=0.56) /  40.0% (p>=0.56) /  46.7% (p>=0.54)
 ```
 
-The 30 example tickets were written by hand for this repository. They demonstrate the format; they are not a benchmark. Read `automate @5%: 93.3% (p>=0.57)` like this: if you act only when the top probability is at least 0.57, the model handles 93.3 % of tickets with at most 5 % errors among them, and everything else goes to a person or an LLM. The report also refits a temperature on half the rows and shows its effect on the other half. See the [skill](skills/jev-style-eval/SKILL.md) for building a proper evaluation set.
+The 30 example tickets were written by hand for this repository. They demonstrate the format; they are not a benchmark. Read `automate @5%: 93.3% (p>=0.57)` like this: if you act only when the top probability is at least 0.57, the model handles 93.3 % of tickets with at most 5 % errors among them, and everything else goes to a person or an LLM. The report also refits a temperature on half the rows and shows its effect on the other half. See the [skill](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style-eval/SKILL.md) for building a proper evaluation set.
+
+### Compare engines
+
+Repeat `--server` to run the same file through several engines: this package's local model, another build or quantisation, or any other server that implements `POST /v1/systemone`. The first one is the reference.
+
+```bash
+jev-style eval examples/support_tickets.jsonl --server bf16=local:mlx --server q8=http://127.0.0.1:8799
+```
+
+```
+90 questions answered by every engine; the table and the differences use only those.
+
+engine             answered failed rows     acc   brier log loss    ece   automate @5% error
+bf16                     90           0   87.8%   0.206    0.369  0.125    80.0% (p>=0.54)
+q8                       90           0   87.8%   0.206    0.370  0.117    78.9% (p>=0.54)
+
+difference to bf16 (95 % paired bootstrap over rows; brier: lower is better):
+  q8               accuracy  +0.0 pts [+0.0, +0.0]   brier +0.001 [-0.001, +0.002]
+```
+
+That run compares the MLX bf16 weights in-process with `jev-style serve --precision 8bit` on an Apple M1 Max. Engine specs are `NAME=URL`, `NAME=local[:backend]`, `NAME=hf:<repo id>` or `NAME=fake`; `--key NAME=ENV_VAR` sends a bearer token from an environment variable and `--model NAME=MODEL` sets the request's `model` field. Every engine is scored on the same questions: if one engine rejects a row (too long, too many options), that row is dropped for all of them and counted under `failed rows`. `--json PATH` writes every answer.
 
 ## API
 
@@ -203,7 +237,7 @@ The 30 example tickets were written by hand for this repository. They demonstrat
 | `choice` | `{option: description or null}`, 1 to 255 options | `choice`, `probabilities`, `confidence` |
 | `score` | 2 to 10 levels, lowest first: `"label"` or `{"label", "description"}` | `score` = expected level index, `legend`, `probabilities`, `confidence` |
 
-`confidence = (k · p_max − 1) / (k − 1)` for k options: 0 when the probabilities are uniform, 1 when one option takes all of them. The other routes are `GET /v1/models`, `GET /healthz` and the Playground at `/`. Errors look like `{"error": {"code", "message", "question"?}}` and use HTTP 422 (`invalid_json`, `invalid_request`, `invalid_question`, `input_budget_exceeded`), 401 (`unauthorized`), 404 or 500. Start the server with `--api-key-env NAME` to require `Authorization: Bearer <key>`. The full reference is [skills/jev-style/reference.md](skills/jev-style/reference.md).
+`confidence = (k · p_max − 1) / (k − 1)` for k options: 0 when the probabilities are uniform, 1 when one option takes all of them. The other routes are `GET /v1/models`, `GET /healthz` and the Playground at `/`. Errors look like `{"error": {"code", "message", "question"?}}` and use HTTP 422 (`invalid_json`, `invalid_request`, `invalid_question`, `input_budget_exceeded`), 401 (`unauthorized`), 404 or 500. Start the server with `--api-key-env NAME` to require `Authorization: Bearer <key>`. The full reference is [skills/jev-style/reference.md](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style/reference.md).
 
 ## Backends
 
@@ -238,6 +272,6 @@ uv run jev-style serve --fake   # UI work without the model
 
 ## Acknowledgements and License
 
-Code: Apache-2.0 ([LICENSE](LICENSE)). The weights are Apache-2.0 fine-tunes of [Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B); the NOTICE in each model repository lists the changes. The typed-question convention follows [Laya](https://github.com/NandhaKishorM/laya).
+Code: Apache-2.0 ([LICENSE](https://github.com/lawrence3699/jev-style/blob/main/LICENSE)). The weights are Apache-2.0 fine-tunes of [Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B); the NOTICE in each model repository lists the changes. The typed-question convention follows [Laya](https://github.com/NandhaKishorM/laya).
 
 Not affiliated with, endorsed by or connected to TypeSafe or Jev. "Jev-Style" describes the kind of model: a small typed-decision model in a similar style. No Jev weights, code or outputs are included. Not affiliated with Alibaba Cloud or the Qwen team or the Laya authors.

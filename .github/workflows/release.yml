@@ -1,0 +1,73 @@
+name: release
+
+# Push a tag vX.Y.Z whose version equals jev_style/__version__ to publish to PyPI.
+# Publishing uses PyPI Trusted Publishing (no API token): on pypi.org, add a publisher for
+# owner lawrence3699, repository jev-style, workflow release.yml, environment pypi.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "testpypi or pypi"
+        default: testpypi
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Tag matches package version
+        if: github.ref_type == 'tag'
+        run: |
+          v=$(python3 -c "import re;print(re.search(r'__version__ = \"(.+?)\"', open('jev_style/__init__.py').read())[1])")
+          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} != package version $v"; exit 1; }
+      - name: Tests
+        run: uv venv && uv pip install -e ".[dev]" && uv run --no-sync pytest -q
+      - name: Build
+        run: uv build --out-dir dist
+      - name: Check metadata
+        run: uvx twine check --strict dist/*
+      - name: Install the wheel in a clean venv
+        run: |
+          uv venv /tmp/clean && VIRTUAL_ENV=/tmp/clean uv pip install dist/*.whl
+          /tmp/clean/bin/python -c "import jev_style; print(jev_style.__version__); jev_style.configure(fake=True); print(jev_style.classify('x', ['a', 'b'])['label'])"
+          /tmp/clean/bin/jev-style --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  testpypi:
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+    needs: build
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  pypi:
+    if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

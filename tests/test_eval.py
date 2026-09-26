@@ -59,3 +59,46 @@ def test_unreadable_label_is_skipped():
     rows = [{"state": "x", "questions": {"t": {"type": "choice", "instructions": "a",
                                                "criteria": {"a": None, "b": None}, "label": "zzz"}}}]
     assert run(rows, JevStyle(fake=True).decide) == []
+
+
+def test_compare_same_questions_and_failures():
+    from jev_style import JevStyle
+    from jev_style.evaluate import compare, render_compare
+    rows = load_rows(EXAMPLES)
+    fake = JevStyle(fake=True).decide
+
+    def flaky(state, qs):                      # fails on the first row, otherwise the same answers
+        if state == rows[0]["state"]:
+            raise RuntimeError("too long")
+        return fake(state, qs)
+    c = compare(rows, {"a": fake, "b": flaky})
+    assert c["engines"]["b"]["failed_rows"] == 1
+    assert c["common_questions"] == 3 * (len(rows) - 1) == c["engines"]["a"]["summary"]["n"]
+    d = c["vs_reference"]["b"]
+    assert d["accuracy"] == 0 and d["accuracy_ci95"] == [0, 0] and d["brier"] == 0
+    assert "difference to a" in render_compare(c)
+
+
+def test_paired_diff_detects_a_better_engine():
+    from jev_style.evaluate import paired_diff
+    ref = [{"row": i, "qid": "q", "probs": {"x": 0.6, "y": 0.4}, "label": "x" if i % 2 else "y"} for i in range(40)]
+    better = [{**r, "probs": {r["label"]: 0.9, ("y" if r["label"] == "x" else "x"): 0.1}} for r in ref]
+    d = paired_diff(ref, better)
+    assert d["accuracy"] == 0.5 and d["accuracy_ci95"][0] > 0 and d["brier_ci95"][1] < 0
+
+
+def test_cli_compare(tmp_path, capsys):
+    out = tmp_path / "c.json"
+    assert main([str(EXAMPLES), "--server", "fake", "--server", "again=fake", "--json", str(out)]) == 0
+    text = capsys.readouterr().out
+    assert "difference to fake" in text and "again" in text and out.exists()
+
+
+def test_parse_server():
+    import pytest
+    from jev_style.evaluate import parse_server
+    assert parse_server("local") == ("local", "local")
+    assert parse_server("local:mlx") == ("local:mlx", "local:mlx")
+    assert parse_server("x=http://h:1/v") == ("x", "http://h:1/v")
+    with pytest.raises(ValueError):
+        parse_server("http://h:1")

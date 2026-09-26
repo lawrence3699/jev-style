@@ -24,12 +24,25 @@ Output, per question id and overall:
 * a refitted temperature: probabilities are re-sharpened or softened as p_i^(1/T) / sum_j p_j^(1/T), with T
   fitted by log loss on a calibration split (``--cal-fraction``, default 0.5) and reported on the other half,
   so the before/after numbers are honest. Apply it in your code with ``recalibrate(probs, T)``.
+
+Comparing engines: repeat ``--server`` to run the same file through several systemone-compatible engines,
+e.g. this package's local model, ``jev-style serve`` on another machine, or any other server that implements
+``POST /v1/systemone``::
+
+    jev-style eval data.jsonl --server local --server other=http://127.0.0.1:8000 --key other=OTHER_API_KEY
+
+Each spec is ``NAME=URL`` (http/https), ``NAME=local`` or ``NAME=local:mlx`` (in-process, any backend),
+``NAME=hf:<repo id>`` (in-process, a Jev-Style release by repo id) or ``NAME=fake``; a bare ``local`` or ``fake``
+is its own name. The first engine is the reference. Every engine is scored on the same questions: the ones every
+engine answered (a row an engine rejects, e.g. too long or too many options, is dropped for all and counted).
+Differences to the reference come with a 95 % paired bootstrap interval over rows.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import math
+import os
 import random
 import sys
 from collections import defaultdict
@@ -169,8 +182,9 @@ def load_rows(path: Path) -> list[dict]:
     return rows
 
 
-def run(rows: list[dict], decide, strict: bool = False) -> list[dict]:
-    """-> [{"row", "qid", "type", "probs", "label"}] for every labelled question."""
+def run(rows: list[dict], decide, strict: bool = False, errors: list | None = None) -> list[dict]:
+    """-> [{"row", "qid", "type", "probs", "label"}] for every labelled question. With ``errors`` (a list), a row
+    whose request fails is recorded there as {"row", "error"} and skipped instead of raising."""
     out = []
     for ri, row in enumerate(rows):
         qs, labels = {}, {}
@@ -187,7 +201,14 @@ def run(rows: list[dict], decide, strict: bool = False) -> list[dict]:
             qs[qid] = q
         if not labels:
             continue
-        resp = decide(row["state"], qs)
+        if errors is None:
+            resp = decide(row["state"], qs)
+        else:
+            try:
+                resp = decide(row["state"], qs)
+            except Exception as e:  # noqa: BLE001 - any engine failure: record it, keep going
+                errors.append({"row": ri, "error": f"{e.__class__.__name__}: {e}"[:300]})
+                continue
         for qid, key in labels.items():
             ans = resp["answers"][qid]
             out.append({"row": ri, "qid": qid, "type": ans["type"], "probs": answer_probs(ans), "label": key})
@@ -245,10 +266,138 @@ def render(summary: dict) -> str:
     return "\n".join(lines)
 
 
+# ----------------------------------------------------------------------------- comparing engines
+BOOTSTRAP = 2000
+
+
+def _row_stats(items: list[dict]) -> dict[int, list[float]]:
+    """row -> [n, correct, brier sum]"""
+    out: dict[int, list[float]] = defaultdict(lambda: [0, 0, 0.0])
+    for it in items:
+        p, y = it["probs"], it["label"]
+        s = out[it["row"]]
+        s[0] += 1
+        s[1] += max(p, key=p.get) == y
+        s[2] += sum((v - (1.0 if k == y else 0.0)) ** 2 for k, v in p.items())
+    return out
+
+
+def paired_diff(ref: list[dict], other: list[dict], seed: int = 0, n_boot: int = BOOTSTRAP) -> dict:
+    """Accuracy and Brier of ``other`` minus ``ref`` on the same questions, with a 95 % bootstrap interval that
+    resamples rows (questions of one row stay together)."""
+    a, b = _row_stats(ref), _row_stats(other)
+    rows = sorted(a)
+    rng = random.Random(seed)
+
+    def diff(sample: list[int]) -> tuple[float, float]:
+        n = sum(a[r][0] for r in sample)
+        return ((sum(b[r][1] for r in sample) - sum(a[r][1] for r in sample)) / n,
+                (sum(b[r][2] for r in sample) - sum(a[r][2] for r in sample)) / n)
+
+    acc, brier = diff(rows)
+    boots = sorted(diff([rows[rng.randrange(len(rows))] for _ in rows]) for _ in range(n_boot)) if rows else []
+    lo, hi = int(0.025 * n_boot), int(0.975 * n_boot) - 1
+
+    def ci(i: int) -> list[float]:
+        vals = sorted(x[i] for x in boots)
+        return [vals[lo], vals[hi]] if vals else [0.0, 0.0]
+    return {"accuracy": acc, "accuracy_ci95": ci(0), "brier": brier, "brier_ci95": ci(1), "rows": len(rows)}
+
+
+def compare(rows: list[dict], engines: dict, strict: bool = False) -> dict:
+    """engines: {name: decide}. Scores every engine on the questions all of them answered."""
+    raw, errs = {}, {}
+    for name, decide in engines.items():
+        print(f"engine {name} ...", file=sys.stderr, flush=True)
+        errs[name] = []
+        raw[name] = run(rows, decide, strict=strict, errors=errs[name])
+    keys = set.intersection(*({(r["row"], r["qid"]) for r in res} for res in raw.values()))
+    common = {n: [r for r in res if (r["row"], r["qid"]) in keys] for n, res in raw.items()}
+    names = list(engines)
+    ref = names[0]
+    return {"reference": ref, "common_questions": len(keys),
+            "engines": {n: {"answered": len(raw[n]), "failed_rows": len(errs[n]), "errors": errs[n][:20],
+                            "summary": metrics(common[n])} for n in names},
+            "vs_reference": {n: paired_diff(common[ref], common[n]) for n in names[1:]},
+            "results": common}
+
+
+def render_compare(c: dict) -> str:
+    def pct(x: float) -> str:
+        return f"{100 * x:5.1f}%"
+    lines = [f"{c['common_questions']} questions answered by every engine; the table and the differences use only "
+             "those.", "",
+             f"{'engine':<18}{'answered':>9}{'failed rows':>12}{'acc':>8}{'brier':>8}{'log loss':>9}{'ece':>7}"
+             "   automate @5% error"]
+    for name, e in c["engines"].items():
+        m = e["summary"]
+        if not m.get("n"):
+            lines.append(f"{name:<18}{e['answered']:>9}{e['failed_rows']:>12}   (nothing in common)")
+            continue
+        a5 = m["automation"]["5%"]
+        lines.append(f"{name:<18}{e['answered']:>9}{e['failed_rows']:>12}{pct(m['accuracy']):>8}{m['brier']:>8.3f}"
+                     f"{m['log_loss']:>9.3f}{m['ece']:>7.3f}   {pct(a5['coverage'])}"
+                     + (f" (p>={a5['threshold']:.2f})" if a5["threshold"] is not None else ""))
+    if c["vs_reference"]:
+        lines += ["", f"difference to {c['reference']} (95 % paired bootstrap over rows; brier: lower is better):"]
+        for name, d in c["vs_reference"].items():
+            lo, hi = d["accuracy_ci95"]
+            blo, bhi = d["brier_ci95"]
+            lines.append(f"  {name:<16} accuracy {100 * d['accuracy']:+5.1f} pts [{100 * lo:+.1f}, {100 * hi:+.1f}]"
+                         f"   brier {d['brier']:+.3f} [{blo:+.3f}, {bhi:+.3f}]")
+    for name, e in c["engines"].items():
+        if e["errors"]:
+            lines.append(f"\n{name}: {e['failed_rows']} rows failed, first: row {e['errors'][0]['row'] + 1}: "
+                         f"{e['errors'][0]['error']}")
+    return "\n".join(lines)
+
+
+def parse_server(spec: str) -> tuple[str, str]:
+    """'NAME=TARGET' or bare 'local' / 'fake' -> (name, target)."""
+    name, sep, target = spec.partition("=")
+    if not sep:
+        if spec.split(":", 1)[0] in ("local", "fake"):
+            return spec, spec
+        raise ValueError(f"--server {spec!r}: expected NAME=URL, NAME=local[:backend], NAME=hf:<repo> or NAME=fake")
+    if not name or not target:
+        raise ValueError(f"--server {spec!r}: empty name or target")
+    return name, target
+
+
+def _keyed(pairs: list[str] | None, flag: str) -> dict[str, str]:
+    out = {}
+    for p in pairs or []:
+        k, sep, v = p.partition("=")
+        if not sep or not k or not v:
+            raise ValueError(f"{flag} {p!r}: expected NAME=VALUE")
+        out[k] = v
+    return out
+
+
+def build_engine(target: str, backend: str, api_key: str | None = None, model: str | None = None):
+    from .client import JevStyle
+    if target.startswith(("http://", "https://")):
+        js = JevStyle(base_url=target, api_key=api_key)
+    elif target == "fake":
+        js = JevStyle(fake=True)
+    elif target.startswith("hf:"):
+        js = JevStyle.from_pretrained(target[3:])
+    elif target.split(":", 1)[0] == "local":
+        js = JevStyle(backend=target.split(":", 1)[1] if ":" in target else backend)
+    else:
+        raise ValueError(f"unknown engine target {target!r}")
+    return lambda state, qs: js.decide(state, qs, model=model)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="jev-style eval", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("data", help="labelled JSONL")
+    ap.add_argument("--server", action="append", metavar="NAME=TARGET",
+                    help="compare engines (repeatable; the first is the reference), see above")
+    ap.add_argument("--key", action="append", metavar="NAME=ENV",
+                    help="bearer token for server NAME, read from environment variable ENV")
+    ap.add_argument("--model", action="append", metavar="NAME=MODEL", help="'model' field to send to server NAME")
     src = ap.add_mutually_exclusive_group()
     src.add_argument("--url", help="running server (default $JEV_STYLE_URL, else load the model in-process)")
     src.add_argument("--fake", action="store_true", help="fake engine (plumbing test only)")
@@ -259,10 +408,41 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--strict", action="store_true", help="stop on a label that names no option (default: skip it)")
     args = ap.parse_args(argv)
 
-    import os
-
     from .client import JevStyle
     rows = load_rows(Path(args.data))[: args.limit]
+    if args.server:
+        if args.url or args.fake:
+            ap.error("--server cannot be combined with --url or --fake (use NAME=URL or NAME=fake)")
+        try:
+            specs = [parse_server(s) for s in args.server]
+            keys, models = _keyed(args.key, "--key"), _keyed(args.model, "--model")
+        except ValueError as e:
+            ap.error(str(e))
+        names = [n for n, _ in specs]
+        if len(set(names)) != len(names):
+            ap.error(f"engine names must be unique, got {names}")
+        for flag, d in (("--key", keys), ("--model", models)):
+            for k in d:
+                if k not in names:
+                    ap.error(f"{flag} names {k!r}, which is not a --server name")
+        missing = [keys[n] for n in keys if not os.environ.get(keys[n])]
+        if missing:
+            print(f"error: environment variable(s) {', '.join(missing)} empty or unset", file=sys.stderr)
+            return 2
+        engines = {n: build_engine(t, args.backend, os.environ.get(keys[n]) if n in keys else None, models.get(n))
+                   for n, t in specs}
+        print(f"{len(rows)} rows, engines: {', '.join(f'{n}={t}' for n, t in specs)}", file=sys.stderr)
+        c = compare(rows, engines, strict=args.strict)
+        if not c["common_questions"]:
+            print(render_compare(c))
+            print("error: no labelled question was answered by every engine", file=sys.stderr)
+            return 2
+        print(render_compare(c))
+        if any(t == "fake" for _, t in specs):
+            print("\nNOTE: a fake engine is included - its numbers say nothing about any model.")
+        if args.json:
+            Path(args.json).write_text(json.dumps(c, ensure_ascii=False, indent=1), encoding="utf-8")
+        return 0
     url = args.url or os.environ.get("JEV_STYLE_URL")
     js = JevStyle(base_url=url) if url else JevStyle(backend=args.backend, fake=args.fake)
     print(f"{len(rows)} rows, engine: {url or ('fake' if args.fake else args.backend)}", file=sys.stderr)

@@ -1,6 +1,6 @@
 [project]
 name = "jev-style"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Small, calibrated decision models you run on your own machine, with a systemone-compatible API, a Claude Code guard, an MCP server and agent skills."
 readme = "README.md"
 license = "Apache-2.0"
@@ -8,7 +8,13 @@ requires-python = ">=3.10"
 authors = [{ name = "chaoliangUNSW" }]
 keywords = ["decision-model", "jev", "classification", "calibration", "mlx", "gguf", "mcp", "claude-code", "agent-skills"]
 classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Operating System :: MacOS",
   "Operating System :: POSIX :: Linux",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -35,14 +41,23 @@ jev-style = "jev_style.cli:main"
 [project.urls]
 Homepage = "https://jevstyle.com"
 Repository = "https://github.com/lawrence3699/jev-style"
+Changelog = "https://github.com/lawrence3699/jev-style/blob/main/CHANGELOG.md"
+Issues = "https://github.com/lawrence3699/jev-style/issues"
 Models = "https://huggingface.co/collections/chaoliangUNSW/jev-style-08b-decision-v3-6ab58abb90ae4b7b55578b3e"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "jev_style/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["jev_style"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/jev_style", "/tests", "/examples", "/README.md", "/CHANGELOG.md", "/LICENSE", "/NOTICE", "/pyproject.toml"]
+exclude = ["**/__pycache__"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

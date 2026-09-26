@@ -34,3 +34,18 @@ jobs:
           for f in .claude-plugin/*.json plugins/*/.claude-plugin/*.json plugins/*/hooks/*.json jev_style/data/*.json; do
             python3 -m json.tool "$f" > /dev/null || { echo "bad json: $f"; exit 1; }
           done
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Build and check
+        run: uv build --out-dir dist && uvx twine check --strict dist/*
+      - name: Install the wheel in a clean venv
+        run: |
+          uv venv /tmp/clean && VIRTUAL_ENV=/tmp/clean uv pip install dist/*.whl
+          /tmp/clean/bin/python -c "import jev_style; jev_style.configure(fake=True); print(jev_style.classify('x', ['a', 'b']))"
+          /tmp/clean/bin/jev-style eval --help > /dev/null
