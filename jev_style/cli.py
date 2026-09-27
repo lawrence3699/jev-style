@@ -39,7 +39,8 @@ def _model_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--dtype", default="float32", choices=("float32", "bfloat16", "float16"), help="torch dtype")
     ap.add_argument("--precision", default="bf16", choices=("bf16", "8bit"), help="mlx weights")
     ap.add_argument("--quant", default="Q8_0", choices=("F16", "Q8_0", "Q4_K_M"), help="gguf file")
-    ap.add_argument("--scorer", help="path to the jev-score binary (gguf backend)")
+    ap.add_argument("--scorer", help="gguf backend: path to the release's scorer binary (0.8b: jev-score, default "
+                                      "$JEV_SCORE_BIN; 2b: jev-score-v2, default $JEV_SCORE_V2_BIN)")
     ap.add_argument("--fake", action="store_true", help="deterministic fake engine, no model (tests / UI work)")
 
 

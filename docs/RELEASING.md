@@ -9,7 +9,7 @@
    publishes to PyPI through Trusted Publishing (environment `pypi`; no token).
 4. `gh release create vX.Y.Z` with the CHANGELOG section.
 
-## Adding a model release (e.g. 2b-v3)
+## Adding a model release (done for 2b-v3 in 0.3.0)
 
 The package pins every build to a Hub revision, so a new model reaches `pip` users only with a package release.
 
@@ -23,7 +23,9 @@ The package pins every build to a Hub revision, so a new model reaches `pip` use
    - the module raises `InputBudgetError` and `QuestionError`; `runtime.renderer.max_len` / `head_max` exist.
 2. In `RELEASES`: fill the three revisions and `release_date`, and check the file patterns against the repos
    (safetensors shards, MLX precision folders, GGUF file names).
-3. MLX prefix sharing stays off (`mlx_prefix_sharing=False`) unless you have shown identical scores with it.
+3. MLX prefix sharing stays off (`mlx_prefix_sharing=False`) unless you have shown identical scores with it. Name any
+   extra root files the runtime's integrity check wants (`mlx_extra`), an exact mlx-lm version it checks (`mlx_lm`),
+   and the GGUF scorer source / binary / environment variable (`scorer_src`, `scorer_bin`, `scorer_env`).
 4. Load each build through the package (`jev-style decide ... --release <key> --backend <b>`) and compare with the
    model card's parity numbers.
 5. README: add the release to the Model table and mention `--release`. Then do a package release (above).

@@ -30,7 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 torch = ["torch>=2.4", "transformers>=5.0"]
-mlx = ["mlx>=0.29; sys_platform == 'darwin'", "mlx-lm>=0.28; sys_platform == 'darwin'"]
+mlx = ["mlx>=0.29; sys_platform == 'darwin'", "mlx-lm==0.31.3; sys_platform == 'darwin'"]
 mcp = ["mcp>=2.0"]
 all = ["jev-style[torch,mlx,mcp]"]
 dev = ["pytest>=8", "jev-style[mcp]"]

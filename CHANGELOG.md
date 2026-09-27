@@ -3,12 +3,18 @@
 Versions follow [semantic versioning](https://semver.org/). Each release pins the model revisions it loads
 (`jev_style/models.py`), so upgrading the package is what changes the weights you get.
 
-## 0.3.0 (unreleased)
+## 0.3.0 (2026-09-27)
 
+- **Jev-Style-2B-Decision-v3.** `--release 2b` (or `JevStyle(release="2b")`, or `from_pretrained` with any of its
+  three repos) loads the new 2B at pinned revisions: PyTorch, MLX (bf16 / 8-bit; needs mlx-lm 0.31.3) and GGUF
+  (F16 / Q8_0 / Q4_K_M; scorer `jev-score-v2`, found through `--scorer` or `$JEV_SCORE_V2_BIN`). The default stays
+  the 0.8B.
+- `[mlx]` now pins mlx-lm 0.31.3 (the 2B MLX runtime checks it; the 0.8B was tested on it). `auto` skips an MLX
+  build whose requirements are not met.
 - **Several model releases.** `jev_style.models.RELEASES` lists each release with its three builds (PyTorch main repo,
   `-MLX`, `-GGUF`). Pick one with `--release` (`serve`, `decide`, `download`, `mcp`), `JevStyle(release=...)`,
   `$JEV_STYLE_RELEASE`, an eval engine `local:<release>[:backend]`, or `JevStyle.from_pretrained(<any of its repos>)`.
-  The default stays `0.8b-v3`. Only releases whose builds are all pinned are offered by the CLI.
+  Only releases whose builds are all pinned are offered by the CLI.
 - The server reports the loaded release: `model` in answers, `/v1/models` and `/healthz` (id, release date,
   description) come from the release instead of being fixed to the 0.8B model.
 - MLX prefix sharing is enabled per build, only where it was shown to give identical scores (0.8B v3 MLX).

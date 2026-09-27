@@ -8,7 +8,7 @@ exactly the answers the model card documents.
 Releases (``--release`` / ``JevStyle(release=...)``; default ``0.8b-v3``), each with three builds:
 
 * ``0.8b-v3``  chaoliangUNSW/Jev-Style-0.8B-Decision-v3[-MLX|-GGUF]
-* ``2b-v3``    chaoliangUNSW/Jev-Style-2B-Decision-v3[-MLX|-GGUF]   (listed once its revisions are pinned)
+* ``2b-v3``    chaoliangUNSW/Jev-Style-2B-Decision-v3[-MLX|-GGUF]
 
 Backends:
 
@@ -68,18 +68,21 @@ _TORCH_FILES = ("jev_style_decision.py", "config.json", "generation_config.json"
 
 
 def _release(key: str, name: str, title: str, model_id: str, release_date: str | None,
-             revisions: dict[str, str | None], torch_weights: tuple[str, ...],
-             mlx_prefix_sharing: bool) -> Release:
+             revisions: dict[str, str | None], torch_weights: tuple[str, ...], mlx_prefix_sharing: bool,
+             mlx_extra: tuple[str, ...] = (), mlx_lm: str | None = None, scorer_src: str = "jev_score.cpp",
+             scorer_bin: str = "jev-score", scorer_env: str = "JEV_SCORE_BIN") -> Release:
     repo = "chaoliangUNSW/" + name
     builds = {
         "torch": Build("torch", repo, revisions["torch"], "jev_style_decision", "JevStyleDecision",
                        _COMMON + _TORCH_FILES + torch_weights, release=key),
         "mlx": Build("mlx", repo + "-MLX", revisions["mlx"], "jev_style_decision_mlx", "JevStyleDecisionMLX",
-                     _COMMON + ("jev_style_decision_mlx.py",),
-                     {"precision_patterns": "{precision}/*", "prefix_sharing": mlx_prefix_sharing}, release=key),
+                     _COMMON + ("jev_style_decision_mlx.py",) + mlx_extra,
+                     {"precision_patterns": "{precision}/*", "prefix_sharing": mlx_prefix_sharing,
+                      "mlx_lm": mlx_lm}, release=key),
         "gguf": Build("gguf", repo + "-GGUF", revisions["gguf"], "jev_style_decision_gguf", "JevStyleDecisionGGUF",
-                      _COMMON + ("jev_style_decision_gguf.py", "jev_score.cpp", "build_jev_score.sh", "tokenizer/*"),
-                      {"quant_file": name + "-{quant}.gguf"}, release=key),
+                      _COMMON + ("jev_style_decision_gguf.py", scorer_src, "build_jev_score.sh", "tokenizer/*"),
+                      {"quant_file": name + "-{quant}.gguf", "scorer_bin": scorer_bin, "scorer_env": scorer_env},
+                      release=key),
     }
     return Release(key, model_id, name, title, release_date, builds)
 
@@ -91,13 +94,17 @@ RELEASES: dict[str, Release] = {
         {"torch": "d53c8f826f35e811d06529f5c1066dfd60eee00c", "mlx": "7f14c9fa1491d168a7f70b16acf68baf9d4f7353",
          "gguf": "b8356a83beb560cf34cbe6f9a20c2076e1b532d3"},
         ("model.safetensors",), mlx_prefix_sharing=True),
-    # TODO(0.3.0): pin the three revisions and the release date once the 2B repos are on the Hub, and check the
-    # file names below against them (sharded safetensors, MLX precision folders, GGUF file names, runtime modules).
-    # Prefix sharing stays off until it is shown bit-identical on the 2B MLX runtime (block attention).
+    # 2B: block attention. Its MLX runtime patches mlx-lm and checks the patched source, so it needs exactly
+    # mlx-lm 0.31.3; its GGUF runtime needs the jev-score-v2 scorer (the 0.8B jev-score is refused). Prefix sharing
+    # stays off: the runtime already reads the state once per call, and the 0.8B patch was never checked on it.
     "2b-v3": _release(
         "2b-v3", "Jev-Style-2B-Decision-v3", "Jev-Style 2B Decision v3", "jev-style-2b-decision-v3",
-        None, {"torch": None, "mlx": None, "gguf": None},
-        ("*.safetensors", "model.safetensors.index.json"), mlx_prefix_sharing=False),
+        "2026-09-27",
+        {"torch": "1b7b03951a21b363d8fbc949207d0fa195a13eff", "mlx": "11ce5d718e22412b38624bb863a1eee73c0a5934",
+         "gguf": "283b9eb7903aeb184b16d49ab8f38b256f4afcb3"},
+        ("*.safetensors", "model.safetensors.index.json"), mlx_prefix_sharing=False,
+        mlx_extra=("config.json", "THIRD_PARTY_NOTICES.md"), mlx_lm="0.31.3",
+        scorer_src="jev_score_v2.cpp", scorer_bin="jev-score-v2", scorer_env="JEV_SCORE_V2_BIN"),
 }
 ALIASES = {"0.8b": "0.8b-v3", "2b": "2b-v3"}
 DEFAULT_RELEASE = "0.8b-v3"
@@ -138,7 +145,7 @@ def resolve_backend(backend: str = "auto", release: str | None = None) -> str:
         if backend not in builds:
             raise ValueError(f"release {get_release(release).key} has no {backend} build")
         return backend
-    if "mlx" in builds and is_apple_silicon() and has_module("mlx") and has_module("mlx_lm"):
+    if "mlx" in builds and is_apple_silicon() and build_problem(builds["mlx"]) is None:
         return "mlx"
     return "torch" if "torch" in builds else next(iter(builds))
 
@@ -150,21 +157,42 @@ class MissingBackendError(ImportError):
 _BACKEND_MODULES = {"torch": ("torch", "transformers"), "mlx": ("mlx", "mlx_lm"), "gguf": ()}
 
 
-def require_backend(backend: str) -> None:
-    """Fail fast, before a 1-2 GB download, when the backend's packages are missing."""
-    missing = [m for m in _BACKEND_MODULES.get(backend, ()) if not has_module(m)]
-    if not missing:
+def _installed_version(dist: str) -> str | None:
+    from importlib import metadata
+    try:
+        return metadata.version(dist)
+    except metadata.PackageNotFoundError:
+        return None
+
+
+def build_problem(build: Build) -> str | None:
+    """Why this build cannot run with the installed packages, or None."""
+    missing = [m for m in _BACKEND_MODULES.get(build.backend, ()) if not has_module(m)]
+    if missing:
+        return f"needs {', '.join(missing)}, which {'is' if len(missing) == 1 else 'are'} not installed"
+    want = build.extra.get("mlx_lm") if build.backend == "mlx" else None
+    have = _installed_version("mlx-lm") if want else None
+    if want and have != want:
+        return f"needs mlx-lm {want} exactly (its runtime patches mlx-lm and checks the source), found {have}"
+    return None
+
+
+def require_backend(backend: str | Build) -> None:
+    """Fail fast, before a 1-4 GB download, when the backend's packages are missing or the wrong version."""
+    build = backend if isinstance(backend, Build) else BUILDS[backend]
+    problem = build_problem(build)
+    if not problem:
         return
-    if backend == "mlx":
+    b = build.backend
+    if b == "mlx":
         hint = 'pip install "jev-style[mlx]"'
     elif is_apple_silicon():
         hint = 'pip install "jev-style[mlx]" (Apple silicon), or "jev-style[torch]" for PyTorch'
     else:
         hint = 'pip install "jev-style[torch]"'
     raise MissingBackendError(
-        f"the {backend} backend needs {', '.join(missing)}, which {'is' if len(missing) == 1 else 'are'} not "
-        f"installed. The bare `pip install jev-style` is only the client; to run the model locally: {hint}. The gguf "
-        "backend needs no extra, only the jev-score scorer (see the GGUF model card).")
+        f"the {b} backend of {build.repo} {problem}. The bare `pip install jev-style` is only the client; to run the "
+        f"model locally: {hint}. The gguf backend needs no extra, only the release's scorer (see the GGUF card).")
 
 
 def build_for_repo(repo: str, *, trust_remote_code: bool = False) -> Build:
@@ -233,7 +261,7 @@ def load_release(backend: str = "auto", *, release: str | None = None, model_dir
     else:
         build = get_release(release).builds[resolve_backend(backend, release)]
     backend = build.backend
-    require_backend(backend)
+    require_backend(build)
     folder = Path(model_dir).expanduser() if model_dir else download(
         backend, precision=precision, quant=quant, revision=revision, build=build,
         trust_remote_code=trust_remote_code)
@@ -245,7 +273,7 @@ def load_release(backend: str = "auto", *, release: str | None = None, model_dir
     elif backend == "mlx":
         runtime = cls(folder, precision=precision, verify=verify)
     else:
-        runtime = cls(folder, quant=quant.upper(), binary=scorer, verify=verify)
+        runtime = cls(folder, quant=quant.upper(), binary=scorer, verify=verify)  # None: the runtime's own lookup
     return runtime, rt, build
 
 

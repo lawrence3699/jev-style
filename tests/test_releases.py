@@ -141,3 +141,52 @@ def test_gguf_needs_no_python_extra(monkeypatch, tmp_path):
     monkeypatch.setattr(models, "import_runtime", lambda folder, module: _Module)
     runtime, _, build = models.load_release("gguf", model_dir=tmp_path)
     assert build.backend == "gguf"
+
+
+# the files of the 2B repos at their pinned revisions (Hub tree, 2026-09-27), without figures/ and validation/
+HUB_2B = {
+    "torch": ["LICENSE", "NOTICE", "README.md", "chat_template.jinja", "config.json", "eval_results.json",
+              "generation_config.json", "jev_style_decision.py", "manifest.json", "model-00001-of-00002.safetensors",
+              "model-00002-of-00002.safetensors", "model.safetensors.index.json", "readout_config.json",
+              "release_config.json", "requirements.txt", "tokenizer.json", "tokenizer_config.json"],
+    "gguf": ["Jev-Style-2B-Decision-v3-F16.gguf", "Jev-Style-2B-Decision-v3-Q4_K_M.gguf",
+             "Jev-Style-2B-Decision-v3-Q8_0.gguf", "LICENSE", "NOTICE", "README.md", "build_jev_score.sh",
+             "jev_score_v2.cpp", "jev_style_decision_gguf.py", "manifest.json", "readout_config.json",
+             "release_config.json", "requirements.txt", "tokenizer/tokenizer.json"],
+    "mlx": ["8bit/model.safetensors", "8bit/config.json", "8bit/macjev_norms_fp32.safetensors", "LICENSE", "NOTICE",
+            "README.md", "THIRD_PARTY_NOTICES.md", "bf16/model.safetensors", "bf16/config.json",
+            "bf16/macjev_norms_fp32.safetensors", "config.json", "jev_style_decision_mlx.py", "manifest.json",
+            "readout_config.json", "release_config.json", "requirements.txt"],
+}
+
+
+def test_2b_patterns_select_what_the_runtimes_need():
+    from huggingface_hub.utils import filter_repo_objects
+    builds = RELEASES["2b-v3"].builds
+
+    def pick(backend, **kw):
+        return set(filter_repo_objects(HUB_2B[backend], allow_patterns=models.patterns_for(builds[backend], **kw)))
+    torch = pick("torch")
+    assert {"jev_style_decision.py", "model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors",
+            "model.safetensors.index.json", "config.json", "manifest.json"} <= torch
+    gguf = pick("gguf", quant="q4_k_m")
+    assert {"jev_score_v2.cpp", "build_jev_score.sh", "jev_style_decision_gguf.py", "tokenizer/tokenizer.json"} <= gguf
+    assert [f for f in gguf if f.endswith(".gguf")] == ["Jev-Style-2B-Decision-v3-Q4_K_M.gguf"]
+    mlx = pick("mlx", precision="8bit")
+    assert {"config.json", "THIRD_PARTY_NOTICES.md", "8bit/macjev_norms_fp32.safetensors"} <= mlx
+    assert not any(f.startswith("bf16/") for f in mlx)
+
+
+def test_2b_mlx_needs_the_pinned_mlx_lm(monkeypatch):
+    b = RELEASES["2b-v3"].builds["mlx"]
+    monkeypatch.setattr(models, "has_module", lambda name: True)
+    monkeypatch.setattr(models, "_installed_version", lambda dist: "0.31.2")
+    assert "mlx-lm 0.31.3" in models.build_problem(b)
+    assert models.build_problem(RELEASES["0.8b-v3"].builds["mlx"]) is None
+    with pytest.raises(models.MissingBackendError, match="0.31.3"):
+        models.require_backend(b)
+    monkeypatch.setattr(models, "is_apple_silicon", lambda: True)
+    assert models.resolve_backend("auto", "2b") == "torch"          # auto skips an MLX build that cannot run
+    assert models.resolve_backend("auto", "0.8b") == "mlx"
+    monkeypatch.setattr(models, "_installed_version", lambda dist: "0.31.3")
+    assert models.resolve_backend("auto", "2b") == "mlx"

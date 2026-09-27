@@ -13,7 +13,7 @@ Small, calibrated decision models you run on your own machine, plus the tooling 
 
 ![The Playground answering a support-ticket request, then the agent-approval demo allowing, asking about and denying tool calls](https://raw.githubusercontent.com/lawrence3699/jev-style/main/docs/demo.gif)
 
-Jev-Style is a family of small decision models built on Qwen3.5. The current model, [Jev-Style-0.8B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3), is 0.53 GB at 4-bit. You give it text or JSON and some typed questions, and it returns a calibrated probability for every option in one forward pass. The server's API follows the public systemone request shape, so clients written for Jev-compatible servers can call your laptop instead.
+Jev-Style is a family of small decision models built on Qwen3.5. The current releases are [Jev-Style-2B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3) and [Jev-Style-0.8B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3) (0.53 GB at 4-bit). You give a model text or JSON and some typed questions, and it returns a calibrated probability for every option in one forward pass. The server's API follows the public systemone request shape, so clients written for Jev-compatible servers can call your laptop instead.
 
 This repository is the part that makes the model useful day to day:
 
@@ -30,26 +30,36 @@ No GPU, no API key and no training needed.
 - **Three question types in one request.** Yes/no (`noul`), multiple choice (`choice`, up to 255 options) and ordered ratings (`score`, 2 to 10 levels). The model reads the text once and answers every question about it.
 - **Probabilities, not just labels.** Each release ships temperatures fitted on held-out data, so your code can act on confident answers and send the rest to a person or an LLM.
 - **Long inputs.** Up to 25,600 tokens per call. Nothing is truncated: an input that is too long is rejected with an error that says so.
-- **Runs locally.** About 0.15 to 0.2 s for a short request with MLX on an M1 Max, after the first call. Nothing leaves your machine.
-- **51 languages evaluated.** Training covers 19 languages. On MASSIVE intent the model beats Laya's multilingual checkpoint in all 51 evaluated languages.
+- **Runs locally.** About 0.15 to 0.2 s for a short request to the 0.8B with MLX on an M1 Max, after the first call. Nothing leaves your machine.
+- **51 languages evaluated.** Training covers 19 languages. On MASSIVE intent the 0.8B beats Laya's multilingual checkpoint in all 51 evaluated languages.
 - **Built for agents.** The skills, the MCP tools and the guard all work with Claude Code, Codex, Cursor and other agents.
 
-## Model
+## Models
 
-| Model | Size | Banking77 (77 intents, never trained) | MASSIVE intent, 37 held-out languages | tweet_topic, zero-shot | JevBench v1.4.1 public (231) | Context |
-|---|---|:---:|:---:|:---:|:---:|:---:|
-| [Jev-Style-0.8B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3) | 0.8B · 0.53 GB (Q4_K_M) | **68.2 %** | **65.5 %** | **75.5 %** | **64.1 %** | 25,600 tokens |
-| Best official Laya checkpoint | 0.8B | 49.2 % | 36.1 % | 63.2 % | 58.4 % | 1,024 by default |
+| Release (`--release`) | Parameters · smallest build | JevBench v1.4.1 public (231) | tweet_topic, zero-shot (1,693) | Context |
+|---|---|:---:|:---:|:---:|
+| [Jev-Style-2B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3) (`2b`) | 1.9B · 1.27 GB (Q4_K_M) | **73.6 %** | **82.2 %** | 25,600 tokens |
+| [Jev-Style-0.8B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3) (`0.8b`, default) | 0.8B · 0.53 GB (Q4_K_M) | 64.1 % | 75.5 % | 25,600 tokens |
+| Hosted Jev 1.13, for reference | – | 86.6 % | 79.3 % | – |
 
-All numbers are from the [model card](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3#results), which gives the full protocol and confidence intervals. The Laya rows are its official checkpoints re-run on the same rows, except tweet_topic and JevBench, which use published numbers. The hosted Jev API has higher accuracy than v3 on every one of these sets where its accuracy is published. Treat v3 as the small local option, not a replacement for the hosted model.
+The 2B numbers are single pre-declared runs with its GGUF F16 build; its [model card](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3) gives the protocols and confidence intervals. Hosted Jev is well ahead on JevBench. On tweet_topic the 2B's accuracy is above Jev's published number, but its macro-F1 is below (0.678 vs 0.694). The 2B was trained on a reduced data pool (60M tokens) and has no separate limit for the question and its options; everything counts toward the 25,600 tokens.
 
-| Build | Size | Used by |
-|---|---:|---|
-| [safetensors (bf16)](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3) | 1.50 GB | `--backend torch` (CUDA, Apple MPS, CPU) |
-| [MLX bf16 / 8-bit](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3-MLX) | 1.50 / 0.80 GB | `--backend mlx` (Apple silicon; `auto` picks it there) |
-| [GGUF F16 / Q8_0 / Q4_K_M](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3-GGUF) | 1.52 / 0.81 / 0.53 GB | `--backend gguf` (llama.cpp through the bundled `jev-score` scorer) |
+The 0.8B against Laya, on sets neither was trained on:
 
-Each build carries its own runtime file next to the weights. The server downloads a pinned revision and uses that file, so the answers here match what the model card documents. Earlier 2B generations, for use in LM Studio or Ollama without this server: [v1 GGUF](https://huggingface.co/chaoliangUNSW/Jev-Style-Qwen3.5-2B-Decision-GGUF) (LM Studio, llama.cpp) and [v2 GGUF](https://huggingface.co/chaoliangUNSW/Jev-Style-Qwen3.5-2B-Decision-v2-GGUF) (Ollama).
+| Model | Banking77 (77 intents, never trained) | MASSIVE intent, 37 held-out languages | tweet_topic, zero-shot | JevBench v1.4.1 public (231) |
+|---|:---:|:---:|:---:|:---:|
+| [Jev-Style-0.8B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3) | **68.2 %** | **65.5 %** | **75.5 %** | **64.1 %** |
+| Best official Laya checkpoint (0.8B, 1,024 tokens by default) | 49.2 % | 36.1 % | 63.2 % | 58.4 % |
+
+These numbers are from the [0.8B model card](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3#results), which gives the full protocol and confidence intervals. The Laya rows are its official checkpoints re-run on the same rows, except tweet_topic and JevBench, which use published numbers. The hosted Jev API has higher accuracy than the 0.8B on every one of these sets where its accuracy is published. Treat both releases as small local options, not replacements for the hosted model.
+
+| Build | 0.8B | 2B | Used by |
+|---|---:|---:|---|
+| safetensors: [0.8B](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3), [2B](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3) | 1.50 GB | 3.76 GB | `--backend torch` (CUDA, Apple MPS, CPU) |
+| MLX bf16 / 8-bit: [0.8B](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3-MLX), [2B](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3-MLX) | 1.50 / 0.80 GB | 3.76 / 2.00 GB | `--backend mlx` (Apple silicon; `auto` picks it there) |
+| GGUF F16 / Q8_0 / Q4_K_M: [0.8B](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3-GGUF), [2B](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3-GGUF) | 1.52 / 0.81 / 0.53 GB | 3.78 / 2.01 / 1.27 GB | `--backend gguf` (llama.cpp through the release's scorer: `jev-score` for the 0.8B, `jev-score-v2` for the 2B) |
+
+Each build carries its own runtime file next to the weights. The server downloads a pinned revision and uses that file, so the answers here match what the model card documents. Stock llama.cpp, Ollama, LM Studio or `mlx_lm.generate` can load the weights but cannot produce the decision scores. The 2B MLX runtime needs mlx-lm 0.31.3 exactly, which `jev-style[mlx]` installs. For long documents on the 2B, use Q8_0 (the default) or F16 rather than Q4_K_M. Earlier 2B generations, for use in LM Studio or Ollama without this server: [v1 GGUF](https://huggingface.co/chaoliangUNSW/Jev-Style-Qwen3.5-2B-Decision-GGUF) (LM Studio, llama.cpp) and [v2 GGUF](https://huggingface.co/chaoliangUNSW/Jev-Style-Qwen3.5-2B-Decision-v2-GGUF) (Ollama).
 
 ## Quick Start
 
@@ -66,6 +76,7 @@ pip install "jev-style[mlx]"      # Apple silicon (MLX)
 pip install "jev-style[torch]"    # Linux, Windows or an Intel Mac (PyTorch on CUDA or CPU)
 
 jev-style serve          # downloads the model once (~1.5 GB), then serves http://127.0.0.1:8765
+jev-style serve --release 2b    # the 2B instead (a 2 to 3.8 GB download, depending on the build)
 ```
 
 To install the command line tool on its own, with the MCP server, use [uv](https://docs.astral.sh/uv/): `uv tool install "jev-style[all]"` on Apple silicon, `uv tool install "jev-style[torch,mcp]"` elsewhere.
@@ -124,6 +135,7 @@ For several questions about one text, and to choose the engine yourself:
 from jev_style import JevStyle, choice, noul, score
 
 js = JevStyle.from_pretrained("chaoliangUNSW/Jev-Style-0.8B-Decision-v3-MLX")   # in-process; the repo picks the backend
+# js = JevStyle(release="2b")                                                    # the 2B, backend chosen for this machine
 # js = JevStyle(base_url="http://127.0.0.1:8765")                                # or a running server
 out = js.decide("I was charged twice. Please fix this ASAP.", {
     "billing": noul("This ticket is about billing."),
@@ -246,7 +258,7 @@ That run compares the MLX bf16 weights in-process with `jev-style serve --precis
 | Apple silicon | `jev-style serve` (MLX bf16; add `--precision 8bit` for 0.8 GB) |
 | NVIDIA GPU | `jev-style serve --backend torch` |
 | CPU only | `jev-style serve --backend torch --device cpu` |
-| llama.cpp | build `jev-score` once (`sh build_jev_score.sh /path/to/llama.cpp` from the GGUF repo), then `jev-style serve --backend gguf --scorer /absolute/path/printed/by/the/script --quant Q4_K_M` |
+| llama.cpp | build the release's scorer once with `sh build_jev_score.sh /path/to/llama.cpp` from its GGUF repo (`jev-score` for the 0.8B, `jev-score-v2` for the 2B), then `jev-style serve --backend gguf --scorer /absolute/path/printed/by/the/script --quant Q4_K_M` (add `--release 2b` for the 2B) |
 | Offline | `jev-style serve --model-dir /path/to/a/downloaded/model/repo` |
 | No model (UI or plumbing work) | `jev-style serve --fake` (deterministic, meaningless answers) |
 
