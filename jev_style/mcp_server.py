@@ -36,6 +36,8 @@ try:
 except ImportError as _e:  # pragma: no cover
     raise SystemExit("the MCP server needs the 'mcp' extra: pip install 'jev-style[mcp]'") from _e
 
+from . import __version__  # noqa: E402
+
 DEFAULT_URL = "http://127.0.0.1:8765"
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 
@@ -118,7 +120,7 @@ class InProcessBackend:
 # server
 # ---------------------------------------------------------------------------------------------
 def build_server(backend: Any) -> MCPServer:
-    mcp = MCPServer("jev-style", title="Jev-Style decisions", instructions=INSTRUCTIONS, version="0.1.0")
+    mcp = MCPServer("jev-style", title="Jev-Style decisions", instructions=INSTRUCTIONS, version=__version__)
 
     def run(state: Any, questions: Dict[str, Any]) -> dict:
         try:

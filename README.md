@@ -1,5 +1,7 @@
 # Jev-Style
 
+<!-- mcp-name: io.github.lawrence3699/jev-style -->
+
 Small, calibrated decision models you run on your own machine, plus the tooling to put them to work in AI agents.
 
 <p>
@@ -187,7 +189,7 @@ On the 49 bundled tool calls, which were written and labelled by hand, the defau
 claude mcp add jev-style --scope user -- jev-style mcp       # Claude Code
 ```
 
-`jev-style mcp` is a thin stdio server that forwards to the running `jev-style serve`, so one copy of the model serves every client. It provides `decide` (several questions about one input), `noul`, `choice`, `score` and `model_info`. Setup for Codex, Cursor and Claude Desktop is in [the skill](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style-mcp/SKILL.md).
+`jev-style mcp` is a thin stdio server that forwards to the running `jev-style serve`, so one copy of the model serves every client. It is also listed in the [official MCP Registry](https://registry.modelcontextprotocol.io/) as `io.github.lawrence3699/jev-style` (runs as `uvx jev-style mcp`; set `JEV_STYLE_URL` if your server is not on `http://127.0.0.1:8765`). It provides `decide` (several questions about one input), `noul`, `choice`, `score` and `model_info`. Setup for Codex, Cursor and Claude Desktop is in [the skill](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style-mcp/SKILL.md).
 
 ## Evaluate on Your Own Data
 

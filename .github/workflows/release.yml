@@ -71,3 +71,31 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  mcp-registry:
+    # Publishes server.json to the official MCP Registry once PyPI serves the new version.
+    # GitHub OIDC login: no token; the registry allows this repo to publish io.github.lawrence3699/*.
+    if: github.ref_type == 'tag'
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait until PyPI serves this version
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          for i in $(seq 1 30); do curl -fsS "https://pypi.org/pypi/jev-style/$v/json" > /dev/null && exit 0; sleep 10; done
+          echo "PyPI does not serve jev-style $v yet"; exit 1
+      - name: Set the version in server.json from the tag
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          jq --arg v "$v" '.version = $v | .packages[0].version = $v' server.json > server.tmp && mv server.tmp server.json
+          cat server.json
+      - name: Install mcp-publisher
+        run: curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+      - name: Log in to the MCP Registry (GitHub OIDC)
+        run: ./mcp-publisher login github-oidc
+      - name: Publish to the MCP Registry
+        run: ./mcp-publisher publish
