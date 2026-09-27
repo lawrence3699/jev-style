@@ -44,7 +44,7 @@ Homepage = "https://jevstyle.com"
 Repository = "https://github.com/lawrence3699/jev-style"
 Changelog = "https://github.com/lawrence3699/jev-style/blob/main/CHANGELOG.md"
 Issues = "https://github.com/lawrence3699/jev-style/issues"
-Models = "https://huggingface.co/collections/chaoliangUNSW/jev-style-08b-decision-v3-6ab58abb90ae4b7b55578b3e"
+Models = "https://huggingface.co/collections/chaoliangUNSW/jev-style-decision-v3-08b-2b-6ab87f32380cbd8c03b608b9"
 
 [build-system]
 requires = ["hatchling"]

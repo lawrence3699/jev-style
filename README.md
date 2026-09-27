@@ -44,7 +44,7 @@ No GPU, no API key and no training needed.
 
 | Release (`--release`) | Parameters · smallest build | JevBench v1.4.1 public (231) | tweet_topic, zero-shot (1,693) | Context |
 |---|---|:---:|:---:|:---:|
-| [Jev-Style-2B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3) (`2b`) | 1.9B · 1.27 GB (Q4_K_M) | **73.6 %** | **82.2 %** | 25,600 tokens |
+| [Jev-Style-2B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3) (`2b`) | 1.9B · 1.27 GB (Q4_K_M) | 73.6 % | **82.2 %** | 25,600 tokens |
 | [Jev-Style-0.8B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3) (`0.8b`, default) | 0.8B · 0.53 GB (Q4_K_M) | 64.1 % | 75.5 % | 25,600 tokens |
 | Hosted Jev 1.13, for reference | – | 86.6 % | 79.3 % | – |
 
