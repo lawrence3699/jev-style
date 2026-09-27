@@ -2,11 +2,15 @@
 
 ## A package release
 
-1. Update `__version__` in `jev_style/__init__.py` and the top of `CHANGELOG.md` (move "unreleased" to a date).
+1. Update `__version__` in `jev_style/__init__.py`, both `version` fields in `server.json`, and the top of
+   `CHANGELOG.md` (move "unreleased" to a date). `tests/test_server_json.py` checks that `server.json` matches.
 2. `uv run pytest -q`, then merge to `main`.
 3. `git tag -a vX.Y.Z -m "jev-style X.Y.Z" && git push origin vX.Y.Z`. The `release` workflow checks that the tag
    equals `__version__`, runs the tests, builds, checks the metadata, installs the wheel in a clean venv and
    publishes to PyPI through Trusted Publishing (environment `pypi`; no token).
+   After the PyPI job, the `mcp-registry` job waits until PyPI serves the version, sets it in `server.json` from the
+   tag and publishes to the MCP Registry (GitHub OIDC). The registry checks that the PyPI README contains
+   `<!-- mcp-name: io.github.lawrence3699/jev-style -->`, so keep that line in `README.md`.
 4. `gh release create vX.Y.Z` with the CHANGELOG section.
 
 ## Adding a model release (done for 2b-v3 in 0.3.0)

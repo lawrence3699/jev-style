@@ -36,7 +36,8 @@ try:
     from mcp.server.mcpserver import MCPServer
     from mcp.server.mcpserver.exceptions import ToolError
 except ImportError as _e:  # pragma: no cover
-    raise SystemExit("the MCP server needs the 'mcp' extra: pip install 'jev-style[mcp]'") from _e
+    raise SystemExit("the MCP server needs the 'mcp' package (a dependency since jev-style 0.3.0): "
+                     "pip install -U jev-style") from _e
 
 from . import __version__  # noqa: E402
 

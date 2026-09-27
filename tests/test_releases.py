@@ -70,6 +70,7 @@ class _Module:
 
 def test_load_release_from_a_local_folder_needs_no_pin(monkeypatch, tmp_path):
     monkeypatch.setattr(models, "import_runtime", lambda folder, module: _Module)
+    monkeypatch.setattr(models, "require_backend", lambda build: None)   # runs without torch / mlx installed (CI: [dev])
     runtime, rt, build = models.load_release("torch", release="2b", model_dir=tmp_path, device="cpu")
     assert (build.release, build.backend, runtime.folder) == ("2b-v3", "torch", tmp_path)
     assert runtime.kw == {"device": "cpu", "dtype": "float32", "verify": False}

@@ -2,19 +2,19 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.lawrence3699/jev-style",
   "title": "Jev-Style",
-  "description": "Local 0.8B decision model: calibrated yes/no, choice and score answers for your agent.",
+  "description": "Local 2B and 0.8B decision models: calibrated yes/no, choice and score answers for your agent.",
   "repository": {
     "url": "https://github.com/lawrence3699/jev-style",
     "source": "github"
   },
   "websiteUrl": "https://jevstyle.com",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "jev-style",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
