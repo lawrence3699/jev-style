@@ -24,6 +24,11 @@ Versions follow [semantic versioning](https://semver.org/). Each release pins th
 - **Fail fast without a backend.** With only `pip install jev-style` (the client), loading the model used to download
   1-2 GB and then stop at `No module named 'torch'`. It now stops before the download with `MissingBackendError`,
   which names the extra to install (`[mlx]` on Apple silicon, `[torch]` elsewhere); the CLI prints it as one line.
+- **MCP Registry.** Listed as `io.github.lawrence3699/jev-style` (`server.json` at the repo root). `mcp` is now a core
+  dependency, so `uvx jev-style mcp` works without extras; `jev-style[mcp]` still resolves. The README carries the
+  registry's `mcp-name` ownership line, and `release.yml` publishes `server.json` to the registry after the PyPI job
+  (GitHub OIDC, no token; the version is taken from the tag).
+- The MCP server reports the package version (it said 0.1.0).
 
 ## 0.2.0 (2026-09-26)
 
