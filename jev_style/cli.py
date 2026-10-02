@@ -37,6 +37,9 @@ def _model_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--device", choices=("cuda", "mps", "cpu"),
                     help="torch device (default: $JEV_STYLE_DEVICE, else the best available)")
     ap.add_argument("--dtype", default="float32", choices=("float32", "bfloat16", "float16"), help="torch dtype")
+    ap.add_argument("--cuda-graphs", default="auto", choices=("auto", "on", "off"),
+                    help="torch on CUDA: record CUDA graphs at start-up for much faster short inputs (auto = on when "
+                         "the model runs on CUDA, or $JEV_STYLE_CUDA_GRAPHS)")
     ap.add_argument("--precision", default="bf16", choices=("bf16", "8bit"), help="mlx weights")
     ap.add_argument("--quant", default="Q8_0", choices=("F16", "Q8_0", "Q4_K_M"), help="gguf file")
     ap.add_argument("--scorer", help="gguf backend: path to the release's scorer binary (0.8b: jev-score, default "
@@ -46,7 +49,8 @@ def _model_args(ap: argparse.ArgumentParser) -> None:
 
 def _load_kw(args: argparse.Namespace) -> dict[str, Any]:
     return {"release": args.release, "model_dir": args.model_dir, "device": args.device, "dtype": args.dtype,
-            "precision": args.precision, "quant": args.quant, "scorer": args.scorer}
+            "precision": args.precision, "quant": args.quant, "scorer": args.scorer,
+            "cuda_graphs": {"auto": None, "on": True, "off": False}[args.cuda_graphs]}
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
