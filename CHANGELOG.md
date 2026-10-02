@@ -3,8 +3,19 @@
 Versions follow [semantic versioning](https://semver.org/). Each release pins the model revisions it loads
 (`jev_style/models.py`), so upgrading the package is what changes the weights you get.
 
-## Unreleased
+## 0.4.0 (unreleased)
 
+<!-- TODO(0.4.0): the release date, and the two new torch revisions below -->
+
+- **CUDA graphs for the PyTorch backend, on by default.** On CUDA the torch runtime records CUDA graphs at start-up
+  and replays them. Measured on an RTX 5090 in float32 on 4,992 calibration questions against the ordinary path:
+  0 top-1 answers changed, largest probability difference 0.00086 (0.8B) and 0.0024 (2B), median latency 41.6 ->
+  11.3 ms (0.8B) and 86.2 -> 13.9 ms (2B). Recording the graphs adds about 7-11 s to start-up; inputs longer than
+  4,096 tokens and several questions over a long shared state use the ordinary path. `--cuda-graphs auto|on|off`
+  (auto = on when the model runs on CUDA), `$JEV_STYLE_CUDA_GRAPHS`, `cuda_graphs=` in `JevStyle` and
+  `models.load_release`. A runtime without the CUDA-graph path loads as before under `auto`; `on` is refused there.
+- **New torch pins.** The PyTorch builds of `0.8b-v3` and `2b-v3` are pinned to revisions that ship the CUDA-graph
+  runtime (TODO). The MLX and GGUF pins are unchanged.
 - **Confidence cascades** (`jev_style.cascade`). A `cascade.json` lists tiers (smallest first: an in-process release,
   a Hub repo, or any `POST /v1/systemone` server) and one threshold per tier below the top. Tier 1 answers every
   question in one call; questions below its threshold (normalized p_max computed from the probabilities, never the
@@ -20,6 +31,23 @@ Versions follow [semantic versioning](https://semver.org/). Each release pins th
   bodies and its answer shapes (no `legend`, `confidence` = p_max) are read correctly. `examples/cascade/` holds a
   2B -> JevK5-9B and a 0.8B -> 2B -> JevK5-9B file (placeholder thresholds); `scripts/cascade_smoke.py` runs one on
   fake engines.
+- **In-process JevK5 tiers**: the target `jevk5:<Hub repo or local folder>` runs allebee/jevk5 in this process, with
+  the code `jevk5-serve` runs (`jevk5.server.normalized`, then `model.decide`; one bad question fails the request as
+  its HTTP 400 does), so a tier answers the same in-process and over HTTP. A Hub repo is downloaded at its revision
+  (pinned for JevK5-9B), checked against its `SHA256SUMS` (by default for the pinned release; tier key `verify`), and
+  refused without its `jevk5_config.json`, without which JevK5 would run uncalibrated. All JevK5 calls run on one
+  worker thread. jevk5 is not on PyPI and is not a dependency: a missing install fails before any download and
+  names the command, `pip install "jevk5[fast] @ git+https://github.com/allebee/jevk5@v0.3.3"`. `jevk5:` also works
+  as an eval engine.
+- **Named cascades** (`jev_style.cascades.CASCADES`): `--cascade`, `JevStyle(cascade=...)` and `cascade:` eval
+  engines take a name as well as a file. **`cascade-9b`** (`jev-style-cascade-9b`): Jev-Style 2B Decision v3
+  in-process (PyTorch float32, CUDA graphs) -> JevK5-9B v0.3.3 by alibiserikbay (third party, Apache-2.0) in-process,
+  one threshold on normalized confidence, calibration set sha256 `580962e4...`. A named cascade whose threshold is
+  still a placeholder is refused. `/v1/models` reports the cascade id and its tiers.
+- `jev-style releases [--json]` lists the model releases (with their pinned revisions) and the named cascades.
+  `jev-style download --cascade NAME|FILE` downloads every tier ahead of time (the JevK5 snapshot is checked as a
+  load checks it; jevk5 itself is not needed for that).
+- `--cuda-graphs` now also applies to a cascade's local tiers, like `--device` and `--dtype`.
 - `jev_style.client.parse_target` / `from_target`: one resolver for engine targets, shared by `eval --server` and the
   cascade tiers. The HTTP client now reports `{"error": "<message>"}` bodies by their message.
 

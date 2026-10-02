@@ -8,13 +8,13 @@
     "source": "github"
   },
   "websiteUrl": "https://jevstyle.com",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "jev-style",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

@@ -13,6 +13,14 @@
    `<!-- mcp-name: io.github.lawrence3699/jev-style -->`, so keep that line in `README.md`.
 4. `gh release create vX.Y.Z` with the CHANGELOG section.
 
+## Freezing a named cascade (cascade-9b in 0.4.0)
+
+Named cascades live in `jev_style/cascades.py`. Set the threshold(s) and `frozen_utc` there (the
+`TAU_*` / `FROZEN_UTC_*` placeholders) and keep `calibration_sha256` equal to the calibration set the thresholds
+were fitted on. Until both are set, `--cascade NAME` is refused (its tiers can still be downloaded);
+`tests/test_cascades.py` checks that every named cascade is either frozen or refused. Fill the README's numbers
+for it from a run of the frozen cascade, and check `jev-style releases`.
+
 ## Adding a model release (done for 2b-v3 in 0.3.0)
 
 The package pins every build to a Hub revision, so a new model reaches `pip` users only with a package release.

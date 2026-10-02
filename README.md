@@ -15,6 +15,8 @@ Small, calibrated decision models you run on your own machine, plus the tooling 
 
 <a href="https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3"><img alt="Jev-Style-2B-Decision-v3: 73.6 % on the 231 public JevBench v1.4.1 items, the highest among the Qwen3.5-2B-family systems on the board; hosted Jev is well ahead at 86.6 %. 25,600 tokens per call, no option cap." src="https://raw.githubusercontent.com/lawrence3699/jev-style/main/docs/assets/jev-style-2b-v3-banner.png"></a>
 
+**New in 0.4.0:** [CUDA graphs](#cuda-graphs) for the PyTorch backend on NVIDIA GPUs, on by default: on an RTX 5090 the median latency falls from 86.2 to 13.9 ms for the 2B and from 41.6 to 11.3 ms for the 0.8B, with no top-1 answer changed on 4,992 calibration questions. And [cascades](#cascades), which send only the questions a small model is unsure of to a larger one, including the named `cascade-9b`: our 2B followed by the third-party [JevK5-9B](https://huggingface.co/alibiserikbay/JevK5-9B).
+
 **New in 0.3.0: [Jev-Style-2B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3).** It scores 73.6 % on the 231 public items of JevBench v1.4.1 (self-run with the official harness on the GGUF F16 build, not an official board entry), 9.5 points above the 0.8B and the highest among the Qwen3.5-2B-family systems on the board. Its lead over decider-2b (71.0 %) is inside the 95 % confidence interval, 42 of the 82 board systems score higher, and hosted Jev is well ahead at 86.6 %. [Try it in your browser](https://huggingface.co/spaces/chaoliangUNSW/jev-style-2b), or run it locally with `jev-style serve --release 2b`. The default release is still the 0.8B, so existing setups get the same model as before.
 
 Jev-Style is a family of small decision models built on Qwen3.5. The current releases are [Jev-Style-2B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3) (1.27 GB at 4-bit) and [Jev-Style-0.8B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3) (0.53 GB at 4-bit, the default); both, with every build and demo, are in the [v3 collection](https://huggingface.co/collections/chaoliangUNSW/jev-style-decision-v3-08b-2b-6ab87f32380cbd8c03b608b9). You give a model text or JSON and some typed questions, and it returns a calibrated probability for every option in one forward pass. The server's API follows the public systemone request shape, so clients written for Jev-compatible servers can call your laptop instead.
@@ -247,7 +249,7 @@ difference to bf16 (95 % paired bootstrap over rows; brier: lower is better):
   q8               accuracy  +0.0 pts [+0.0, +0.0]   brier +0.001 [-0.001, +0.002]
 ```
 
-That run compares the MLX bf16 weights in-process with `jev-style serve --precision 8bit` on an Apple M1 Max. Engine specs are `NAME=URL`, `NAME=local[:backend]`, `NAME=hf:<repo id>`, `NAME=cascade:<file>` or `NAME=fake`; `--key NAME=ENV_VAR` sends a bearer token from an environment variable and `--model NAME=MODEL` sets the request's `model` field. Every engine is scored on the same questions: if one engine rejects a row (too long, too many options), that row is dropped for all of them and counted under `failed rows`. `--json PATH` writes every answer.
+That run compares the MLX bf16 weights in-process with `jev-style serve --precision 8bit` on an Apple M1 Max. Engine specs are `NAME=URL`, `NAME=local[:backend]`, `NAME=hf:<repo id>`, `NAME=jevk5:<repo id or folder>`, `NAME=cascade:<name or file>` or `NAME=fake`; `--key NAME=ENV_VAR` sends a bearer token from an environment variable and `--model NAME=MODEL` sets the request's `model` field. Every engine is scored on the same questions: if one engine rejects a row (too long, too many options), that row is dropped for all of them and counted under `failed rows`. `--json PATH` writes every answer.
 
 ## API
 
@@ -263,25 +265,72 @@ That run compares the MLX bf16 weights in-process with `jev-style serve --precis
 
 ## Cascades
 
-A cascade answers each question with the smallest model that is confident enough and sends only the rest to a larger one, for example the 2B in-process and [JevK5-9B](https://huggingface.co/alibiserikbay/JevK5-9B) behind its own `jevk5-serve`:
+A cascade answers each question with the smallest model that is confident enough and sends only the rest to a larger one. Tier 1 answers every question in one call; a question whose confidence `(k · p_max − 1) / (k − 1)` (for noul `|2 · P(true) − 1|`) is below the tier's threshold, or that the tier failed on, goes to the next tier in one call with the same state. The top tier's answer is final; if it fails, the last answer that succeeded is used, and only if every tier failed is the error returned. Answers keep the usual schema and add `tier` and `tier_model`; `timing.tiers` reports each tier's calls, and `GET /v1/models` reports the cascade's id, its tiers and their thresholds.
+
+`--cascade` (for `serve`, `decide` and `download`), `JevStyle(cascade=...)` and the eval engine `NAME=cascade:...` take either the name of a cascade that ships with the package or a cascade file. `jev-style releases` lists the named cascades with their thresholds, tiers and pinned revisions.
+
+### cascade-9b
+
+`cascade-9b` (model id `jev-style-cascade-9b`) is a cascade of our 2B with a third-party model:
+
+1. [Jev-Style-2B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3) runs in-process (PyTorch, float32, with [CUDA graphs](#cuda-graphs)) and answers every question;
+2. a question whose confidence is below one threshold τ goes to [JevK5-9B](https://huggingface.co/alibiserikbay/JevK5-9B) v0.3.3 by alibiserikbay (Apache-2.0), which runs in the same process through its own runtime, [allebee/jevk5](https://github.com/allebee/jevk5), at a pinned revision. It runs the same code as `jevk5-serve`, so it gives the same answers as JevK5-9B behind `jevk5-serve`.
+
+<!-- TODO(0.4.0): fill in tau and the numbers below (with the test set and GPU they were measured on). -->
+τ = **TBD**, the same for every question type, was frozen on a calibration set (sha256 `580962e4b2bc86b32b42731eda42536f57321c7d1ca9ac1e3b970bf7dbd7e2d2`).
+
+| cascade-9b | |
+|---|:---:|
+| Accuracy | **TBD** |
+| Share of questions answered by the 2B | **TBD** |
+| Median latency per request | **TBD** |
+
+We do not claim that `cascade-9b` is more accurate than JevK5-9B on its own; what the cascade changes is how many questions reach the 9B at all. JevK5-9B's model card says that part of its training labels came from OpenAI's GPT-6 Luna, generated under OpenAI's terms; check that those terms suit your use.
+
+It needs an NVIDIA GPU with room for both models (the JevK5-9B snapshot is about 19 GB), PyTorch, and the jevk5 package, which is not on PyPI:
+
+```bash
+pip install "jev-style[torch]" "jevk5[fast] @ git+https://github.com/allebee/jevk5@v0.3.3"
+jev-style download --cascade cascade-9b      # both tiers; the JevK5-9B snapshot is checked against its SHA256SUMS
+jev-style serve --cascade cascade-9b --backend torch --device cuda
+```
+
+The JevK5 tier refuses to load without the model's `jevk5_config.json` (its calibration temperatures), since JevK5 would otherwise run uncalibrated. From Python the same cascade is `JevStyle(cascade="cascade-9b")`.
+
+### Your own cascades
+
+A cascade file lists the tiers (smallest first) and one threshold per tier below the top, for example the 2B in-process and JevK5-9B behind its own `jevk5-serve`:
 
 ```bash
 jevk5-serve --model alibiserikbay/JevK5-9B --port 8090        # on the GPU box (see allebee/jevk5)
 jev-style serve --cascade examples/cascade/glue-2.json --backend torch --device cuda
 ```
 
-The file lists the tiers (smallest first) and one threshold per tier below the top. Tier 1 answers every question in one call; a question whose confidence `(k · p_max − 1) / (k − 1)` (for noul `|2 · P(true) − 1|`) is below the tier's threshold, or that the tier failed on, goes to the next tier in one call with the same state. The top tier's answer is final; if it fails, the last answer that succeeded is used, and only if every tier failed is the error returned. Answers keep the usual schema and add `tier` and `tier_model`; `timing.tiers` reports each tier's calls. Tier targets are `local[:release][:backend]`, `hf:<repo id>`, `http(s)://...` (`"protocol": "jevk5"` for `jevk5-serve`) or `fake`; `"max_options"` keeps questions with more options away from a tier. The same file works as `JevStyle(cascade="glue-2.json")`, `jev-style decide --cascade` and `jev-style eval --server glue=cascade:glue-2.json`. The thresholds in `examples/cascade/` are placeholders, not calibrated values. `jev_style.cascade.select()` replays recorded per-tier answers offline with the same rules.
+Tier targets are `local[:release][:backend]`, `hf:<repo id>`, `jevk5:<repo id or folder>` (JevK5 in-process, as in `cascade-9b`; needs the jevk5 package), `http(s)://...` (`"protocol": "jevk5"` for `jevk5-serve`) or `fake`; `"max_options"` keeps questions with more options away from a tier, and `"verify"` checks a tier's files (a JevK5 tier's `SHA256SUMS`, on by default for the pinned JevK5-9B). The same file works as `JevStyle(cascade="glue-2.json")`, `jev-style decide --cascade` and `jev-style eval --server glue=cascade:glue-2.json`. The thresholds in `examples/cascade/` are placeholders, not calibrated values. `jev_style.cascade.select()` replays recorded per-tier answers offline with the same rules.
 
 ## Backends
 
 | Machine | Command |
 |---|---|
 | Apple silicon | `jev-style serve` (MLX bf16; add `--precision 8bit` for 0.8 GB, or `--release 2b --precision 8bit` for the 2B at 2.0 GB) |
-| NVIDIA GPU | `jev-style serve --backend torch` |
+| NVIDIA GPU | `jev-style serve --backend torch` (with [CUDA graphs](#cuda-graphs)) |
 | CPU only | `jev-style serve --backend torch --device cpu` |
 | llama.cpp | build the release's scorer once with `sh build_jev_score.sh /path/to/llama.cpp` from its GGUF repo (`jev-score` for the 0.8B, `jev-score-v2` for the 2B), then `jev-style serve --backend gguf --scorer /absolute/path/printed/by/the/script --quant Q4_K_M` (add `--release 2b` for the 2B) |
 | Offline | `jev-style serve --model-dir /path/to/a/downloaded/model/repo` |
 | No model (UI or plumbing work) | `jev-style serve --fake` (deterministic, meaningless answers) |
+
+## CUDA Graphs
+
+On an NVIDIA GPU the PyTorch backend records CUDA graphs when it starts and then replays them, instead of launching every kernel of a call one by one. It is on by default whenever the model runs on CUDA (`--cuda-graphs auto`); `--cuda-graphs off`, `JEV_STYLE_CUDA_GRAPHS=0` or `JevStyle(..., cuda_graphs=False)` turns it off. It only applies to the PyTorch backend on CUDA.
+
+Measured on an RTX 5090 in float32 on 4,992 calibration questions, against the same runtime without graphs:
+
+| Release | Median latency | Top-1 answers changed | Largest probability difference |
+|---|:---:|:---:|:---:|
+| 2B | 86.2 → 13.9 ms | 0 | 0.0024 |
+| 0.8B | 41.6 → 11.3 ms | 0 | 0.00086 |
+
+Recording the graphs adds about 7 to 11 s to start-up. Inputs longer than 4,096 tokens, and several questions over a long shared state, take the ordinary path. The graphs live in the PyTorch builds' runtime file, at the revisions this version pins; with an older runtime, `auto` loads it as before and `--cuda-graphs on` is refused.
 
 ## Repository Layout
 
@@ -308,4 +357,6 @@ uv run jev-style serve --fake   # UI work without the model
 
 Code: Apache-2.0 ([LICENSE](https://github.com/lawrence3699/jev-style/blob/main/LICENSE)). The weights are Apache-2.0 fine-tunes of [Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B) and [Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B); the NOTICE in each model repository lists the changes. The typed-question convention follows [Laya](https://github.com/NandhaKishorM/laya).
 
-Not affiliated with, endorsed by or connected to TypeSafe or Jev. "Jev-Style" describes the kind of model: a small typed-decision model in a similar style. No Jev weights, code or outputs are included. Not affiliated with Alibaba Cloud or the Qwen team or the Laya authors.
+`cascade-9b` and `jevk5:` tiers use [JevK5-9B](https://huggingface.co/alibiserikbay/JevK5-9B) by alibiserikbay and its runtime [allebee/jevk5](https://github.com/allebee/jevk5), both Apache-2.0. Neither is included in this package: the runtime is installed separately and the weights are downloaded from their own repository. Per its model card, part of JevK5-9B's training labels came from OpenAI's GPT-6 Luna under OpenAI's terms.
+
+Not affiliated with, endorsed by or connected to TypeSafe or Jev. "Jev-Style" describes the kind of model: a small typed-decision model in a similar style. No Jev weights, code or outputs are included. Not affiliated with Alibaba Cloud or the Qwen team, the Laya authors or the JevK5 author.
