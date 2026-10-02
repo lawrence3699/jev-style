@@ -534,7 +534,7 @@ def test_examples_are_valid():
 
 def test_tier_dtype_is_validated_and_round_trips():
     base = {"id": "c", "description": "d", "thresholds": [0.5],
-            "tiers": [{"name": "a", "model_id": "a", "target": "fake", "dtype": "bfloat16"},
+            "tiers": [{"name": "a", "model_id": "a", "target": "local:0.8b-v3", "dtype": "bfloat16"},
                       {"name": "b", "model_id": "b", "target": "http://127.0.0.1:1"}]}
     cfg = CascadeConfig.from_dict(base)
     assert cfg.tiers[0].dtype == "bfloat16" and cfg.to_dict()["tiers"][0]["dtype"] == "bfloat16"
