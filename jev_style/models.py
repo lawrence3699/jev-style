@@ -88,12 +88,17 @@ def _release(key: str, name: str, title: str, model_id: str, release_date: str |
     return Release(key, model_id, name, title, release_date, builds)
 
 
+# TODO(0.4.0, before the release): pin the new torch revisions of BOTH releases (the main repos with the CUDA-graph
+# runtime, whose JevStyleDecision takes cuda_graphs=) in the two "torch" entries below, after the Hugging Face push.
+# Until then the torch builds load their old runtimes, which have no CUDA-graph path (auto loads them as before).
+# The 0.8B torch pin d53c8f82 also has a manifest bug that makes verify=True fail. The mlx / gguf pins stay. If the
+# new torch repos add a runtime file, add it to _TORCH_FILES (and to HUB_2B in tests/test_releases.py).
 RELEASES: dict[str, Release] = {
     "0.8b-v3": _release(
         "0.8b-v3", "Jev-Style-0.8B-Decision-v3", "Jev-Style 0.8B Decision v3", "jev-style-0.8b-decision-v3",
         "2026-09-24",
-        {"torch": "d53c8f826f35e811d06529f5c1066dfd60eee00c", "mlx": "7f14c9fa1491d168a7f70b16acf68baf9d4f7353",
-         "gguf": "b8356a83beb560cf34cbe6f9a20c2076e1b532d3"},
+        {"torch": "d53c8f826f35e811d06529f5c1066dfd60eee00c",     # TODO(0.4.0): new torch revision (CUDA graphs)
+         "mlx": "7f14c9fa1491d168a7f70b16acf68baf9d4f7353", "gguf": "b8356a83beb560cf34cbe6f9a20c2076e1b532d3"},
         ("model.safetensors",), mlx_prefix_sharing=True),
     # 2B: block attention. Its MLX runtime patches mlx-lm and checks the patched source, so it needs exactly
     # mlx-lm 0.31.3; its GGUF runtime needs the jev-score-v2 scorer (the 0.8B jev-score is refused). Prefix sharing
@@ -101,8 +106,8 @@ RELEASES: dict[str, Release] = {
     "2b-v3": _release(
         "2b-v3", "Jev-Style-2B-Decision-v3", "Jev-Style 2B Decision v3", "jev-style-2b-decision-v3",
         "2026-09-27",
-        {"torch": "1b7b03951a21b363d8fbc949207d0fa195a13eff", "mlx": "11ce5d718e22412b38624bb863a1eee73c0a5934",
-         "gguf": "283b9eb7903aeb184b16d49ab8f38b256f4afcb3"},
+        {"torch": "1b7b03951a21b363d8fbc949207d0fa195a13eff",     # TODO(0.4.0): new torch revision (CUDA graphs)
+         "mlx": "11ce5d718e22412b38624bb863a1eee73c0a5934", "gguf": "283b9eb7903aeb184b16d49ab8f38b256f4afcb3"},
         ("*.safetensors", "model.safetensors.index.json"), mlx_prefix_sharing=False,
         mlx_extra=("config.json", "THIRD_PARTY_NOTICES.md"), mlx_lm="0.31.3",
         scorer_src="jev_score_v2.cpp", scorer_bin="jev-score-v2", scorer_env="JEV_SCORE_V2_BIN"),
