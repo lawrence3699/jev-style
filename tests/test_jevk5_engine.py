@@ -299,3 +299,16 @@ def test_sha256sums_accepts_a_hub_cache_snapshot_of_symlinks(tmp_path):
     (blobs / hashlib.sha256(b"weights").hexdigest()).write_bytes(b"tampered")
     with pytest.raises(Exception, match="sha256 does not match"):
         verify_sha256sums(snap)
+
+
+def test_a_shadowing_jevk5_folder_gets_a_clear_error(monkeypatch, tmp_path):
+    # `import jevk5` from a directory holding a checkout of the jevk5 repo finds a namespace package without JevK5.
+    import types
+    from jev_style.jevk5_engine import import_jevk5
+    from jev_style.models import MissingBackendError
+    shadow = types.ModuleType("jevk5")
+    shadow.__path__ = [str(tmp_path / "jevk5")]
+    monkeypatch.setitem(sys.modules, "jevk5", shadow)
+    monkeypatch.setitem(sys.modules, "jevk5.server", types.ModuleType("jevk5.server"))
+    with pytest.raises(MissingBackendError, match="shadow"):
+        import_jevk5()

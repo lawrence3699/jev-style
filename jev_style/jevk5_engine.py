@@ -87,6 +87,11 @@ def import_jevk5() -> tuple[ModuleType, ModuleType]:
                 '"protocol": "jevk5".') from None
         raise MissingBackendError(f"jevk5 is installed but cannot be imported ({e}); install it with its "
                                   f"dependencies: {JEVK5_INSTALL}") from None
+    if not hasattr(pkg, "JevK5"):                   # e.g. a checkout of the jevk5 repo in the working directory
+        where = list(getattr(pkg, "__path__", [])) or getattr(pkg, "__file__", "?")
+        raise MissingBackendError(f"'import jevk5' found {where}, which is not the jevk5 package (no JevK5 class); "
+                                  "a folder named jevk5 in the working directory can shadow the installed package. "
+                                  f"Run from another directory, or install it: {JEVK5_INSTALL}")
     return pkg, server
 
 
