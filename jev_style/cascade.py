@@ -39,6 +39,9 @@ Config (``cascade.json``, see ``CascadeConfig``)::
      "thresholds": [0.6], "confidence": "normalized_pmax",
      "frozen_utc": "2026-10-03T00:00:00Z", "calibration_sha256": "<64 hex>"}
 
+Named cascades: ``jev_style.cascades.CASCADES`` (``jev-style releases`` lists them). Everywhere a cascade is taken
+(``--cascade``, ``JevStyle(cascade=...)``, the eval engine ``cascade:...``) a registry name works as well as a file.
+
 Offline replay: ``select([answer_tier1, answer_tier2, ...], thresholds)`` -> ``Routed(tier, answer)``, where each
 entry is the tier's answer dict for one question as recorded (its systemone answer), an error (``TierError``, an
 exception, or a ``{"error": ...}`` dict) or ``None`` (not recorded / not asked).
@@ -52,7 +55,7 @@ import math
 import os
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Mapping, NamedTuple, Sequence
@@ -393,14 +396,10 @@ class CascadeAdapter:
     @classmethod
     def from_config(cls, config: "CascadeConfig | Mapping[str, Any] | str | Path", *, backend: str = "auto",
                     **load_kw: Any) -> "CascadeAdapter":
-        """Build every tier of a cascade file / dict. ``backend`` and ``load_kw`` (device, dtype, precision, quant)
-        apply to ``local`` / ``hf`` tiers that do not say otherwise."""
-        if isinstance(config, CascadeConfig):
-            cfg = config
-        elif isinstance(config, Mapping):
-            cfg = CascadeConfig.from_dict(config)
-        else:
-            cfg = load_config(config)
+        """Build every tier of a cascade (a registry name, file, dict or CascadeConfig, see ``resolve_config``).
+        ``backend`` and ``load_kw`` (device, dtype, precision, quant, cuda_graphs) apply to ``local`` / ``hf`` tiers
+        that do not say otherwise."""
+        cfg = resolve_config(config)
         tiers = [build_tier(t, backend=backend, **load_kw) for t in cfg.tiers]
         return cls(tiers, cfg.thresholds, cascade_id=cfg.id, description=cfg.description, config=cfg)
 
@@ -729,3 +728,86 @@ def build_tier(cfg: TierConfig, *, backend: str = "auto", **load_kw: Any) -> Tie
     engine = from_target(cfg.target, backend=backend, **kw)
     return Tier(cfg.name, cfg.model_id, engine, cfg.max_options, cfg.protocol, cfg.target, cfg.revision)
 
+
+# ----------------------------------------------------------------------------- named cascades, downloads
+def _registry_key(spec: Any) -> str | None:
+    if not isinstance(spec, str):
+        return None
+    from .cascades import CASCADES
+    key = spec.strip().lower()
+    return key if key in CASCADES else None
+
+
+def resolve_config(spec: "CascadeConfig | Mapping[str, Any] | str | Path") -> CascadeConfig:
+    """A cascade from a CascadeConfig, a dict, a registry name (``jev_style.cascades.CASCADES``; a name wins over a
+    file of the same name, use ``./name`` for the file) or a path to a cascade file. A named cascade must be frozen:
+    one whose threshold or frozen_utc is still a placeholder in this version is refused."""
+    if isinstance(spec, CascadeConfig):
+        return spec
+    if isinstance(spec, Mapping):
+        return CascadeConfig.from_dict(spec)
+    key = _registry_key(spec)
+    if key is None:
+        try:
+            return load_config(spec)
+        except CascadeConfigError as e:
+            from .cascades import CASCADES
+            p = Path(spec).expanduser()
+            if not p.exists() and p.suffix != ".json" and len(p.parts) == 1:
+                raise CascadeConfigError(f"{e} ({spec!r} is not a named cascade either; known: "
+                                         f"{', '.join(CASCADES)})") from None
+            raise
+    from . import cascades
+    missing = cascades.placeholders(key)
+    if missing:
+        verb = "is" if len(missing) == 1 else "are"
+        raise CascadeConfigError(f"cascade {key} is not frozen in jev-style {_version()}: {', '.join(missing)} {verb} "
+                                 "still a placeholder in jev_style/cascades.py, so it is not loaded (its tiers can be "
+                                 f"downloaded: jev-style download --cascade {key})")
+    d = cascades.get(key)
+    try:
+        cfg = CascadeConfig.from_dict(d)
+    except CascadeConfigError as e:
+        raise CascadeConfigError(f"cascade {key}: {e}") from None
+    canon = json.dumps(cfg.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return replace(cfg, sha256=hashlib.sha256(canon.encode()).hexdigest())   # of its canonical JSON
+
+
+def resolve_tiers(spec: "CascadeConfig | Mapping[str, Any] | str | Path") -> tuple[TierConfig, ...]:
+    """The tiers of a cascade, without requiring it to be frozen (for downloads ahead of time)."""
+    key = _registry_key(spec)
+    if key is None:
+        return resolve_config(spec).tiers
+    from . import cascades
+    return tuple(_tier(t, i) for i, t in enumerate(cascades.get(key)["tiers"]))
+
+
+def download_tiers(spec: "CascadeConfig | Mapping[str, Any] | str | Path", *, backend: str = "auto",
+                   precision: str = "bf16", quant: str = "Q8_0") -> list[tuple[TierConfig, Path | None]]:
+    """Fetch every tier's files ahead of time: local / hf tiers the build that would load (``backend`` unless the
+    target names one), jevk5 tiers the snapshot, checked as loading checks it (SHA256SUMS for the pinned release,
+    the calibration config always; the jevk5 package is not needed). http / fake tiers have nothing to download
+    (None). Returns (tier, folder) pairs in tier order."""
+    from .client import parse_target
+    from .models import build_for_repo, download
+    out: list[tuple[TierConfig, Path | None]] = []
+    for t in resolve_tiers(spec):
+        kind, kw = parse_target(t.target)
+        if kind == "local":
+            folder = download(kw.get("backend", backend), precision=precision, quant=quant, revision=t.revision,
+                              release=kw.get("release"))
+        elif kind == "hf":
+            folder = download(build=build_for_repo(kw["repo"]), precision=precision, quant=quant,
+                              revision=t.revision)
+        elif kind == "jevk5":
+            from .jevk5_engine import download as download_jevk5
+            folder = download_jevk5(kw["jevk5"], revision=t.revision, verify=t.verify)
+        else:
+            folder = None
+        out.append((t, folder))
+    return out
+
+
+def _version() -> str:
+    from . import __version__
+    return __version__

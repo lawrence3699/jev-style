@@ -35,7 +35,7 @@ Each spec is ``NAME=URL`` (http/https), ``NAME=local[:release][:backend]`` such 
 (in-process),
 ``NAME=hf:<repo id>`` (in-process, a Jev-Style release by repo id), ``NAME=jevk5:<repo id or folder>`` (JevK5
 in-process, answering as ``jevk5-serve`` does, see ``jev_style.jevk5_engine``),
-``NAME=cascade:<cascade.json>`` (a confidence cascade, see ``jev_style.cascade``) or ``NAME=fake``; a bare
+``NAME=cascade:<name or cascade.json>`` (a confidence cascade, see ``jev_style.cascade``) or ``NAME=fake``; a bare
 ``local`` or ``fake`` is its own name. The first
 engine is the reference. Every engine is scored on the same questions: the ones every
 engine answered (a row an engine rejects, e.g. too long or too many options, is dropped for all and counted).
@@ -363,7 +363,7 @@ def parse_server(spec: str) -> tuple[str, str]:
         if spec.split(":", 1)[0] in ("local", "fake"):
             return spec, spec
         raise ValueError(f"--server {spec!r}: expected NAME=URL, NAME=local[:release][:backend], NAME=hf:<repo>, "
-                         "NAME=jevk5:<repo or folder>, NAME=cascade:<path> or NAME=fake")
+                         "NAME=jevk5:<repo or folder>, NAME=cascade:<name or path> or NAME=fake")
     if not name or not target:
         raise ValueError(f"--server {spec!r}: empty name or target")
     return name, target

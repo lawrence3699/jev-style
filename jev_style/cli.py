@@ -2,8 +2,10 @@
 
     jev-style serve                      start the local server (API + Playground) on :8765
     jev-style serve --cascade c.json     serve a confidence cascade of several models (see jev_style.cascade)
+    jev-style serve --cascade cascade-9b serve a named cascade (jev-style releases lists them)
     jev-style decide "text" --noul "Is this about billing?"
-    jev-style download [--backend mlx]   fetch the weights ahead of time
+    jev-style download [--backend mlx]   fetch the weights ahead of time (--cascade NAME|FILE: every tier)
+    jev-style releases [--json]          the model releases and named cascades this version pins
     jev-style guard [--check CMD]        Claude Code PreToolUse hook
     jev-style guard-replay               score the guard on labelled tool calls
     jev-style mcp                        MCP server (stdio) for Claude Code, Cursor, Codex ...
@@ -46,20 +48,25 @@ def _model_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--scorer", help="gguf backend: path to the release's scorer binary (0.8b: jev-score, default "
                                       "$JEV_SCORE_BIN; 2b: jev-score-v2, default $JEV_SCORE_V2_BIN)")
     ap.add_argument("--fake", action="store_true", help="deterministic fake engine, no model (tests / UI work)")
-    ap.add_argument("--cascade", metavar="CASCADE_JSON",
-                    help="a confidence cascade file: its tiers name their own models (--release / --model-dir do not "
-                         "apply; --backend, --device, --dtype, --precision, --quant are defaults for local tiers)")
+    ap.add_argument("--cascade", metavar="NAME_OR_FILE",
+                    help="a confidence cascade: a name from `jev-style releases` (e.g. cascade-9b) or a cascade file. "
+                         "Its tiers name their own models (--release / --model-dir do not apply; --backend, --device, "
+                         "--dtype, --cuda-graphs, --precision, --quant are defaults for local tiers)")
+
+
+def _cuda_graphs(args: argparse.Namespace) -> bool | None:
+    return {"auto": None, "on": True, "off": False}[args.cuda_graphs]
 
 
 def _load_kw(args: argparse.Namespace) -> dict[str, Any]:
     return {"release": args.release, "model_dir": args.model_dir, "device": args.device, "dtype": args.dtype,
-            "precision": args.precision, "quant": args.quant, "scorer": args.scorer,
-            "cuda_graphs": {"auto": None, "on": True, "off": False}[args.cuda_graphs]}
+            "precision": args.precision, "quant": args.quant, "scorer": args.scorer, "cuda_graphs": _cuda_graphs(args)}
 
 
 def _tier_kw(args: argparse.Namespace) -> dict[str, Any]:
     """Loader defaults for a cascade's local tiers (the release, folder and scorer are per tier)."""
-    return {"device": args.device, "dtype": args.dtype, "precision": args.precision, "quant": args.quant}
+    return {"device": args.device, "dtype": args.dtype, "precision": args.precision, "quant": args.quant,
+            "cuda_graphs": _cuda_graphs(args)}
 
 
 def _cascade_conflict(args: argparse.Namespace) -> str | None:
@@ -88,7 +95,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
         return 2
     from .server import build_app
     if args.cascade:
-        print(f"loading the cascade {args.cascade} (the first run downloads its local models) ...", flush=True)
+        print(f"loading the cascade {args.cascade} (the first run downloads its models) ...", flush=True)
         app = build_app(args.backend, api_key=api_key, cascade=args.cascade, **_tier_kw(args))
     else:
         print("loading the model (the first run downloads it) ..." if not args.fake else "fake engine", flush=True)
@@ -106,8 +113,50 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 
 def cmd_download(args: argparse.Namespace) -> int:
+    if args.cascade:
+        from .cascade import download_tiers
+        for tier, folder in download_tiers(args.cascade, backend=args.backend, precision=args.precision,
+                                           quant=args.quant):
+            where = folder if folder is not None else f"nothing to download ({tier.target})"
+            print(f"{tier.name}\t{where}", flush=True)
+        return 0
     from .models import download
     print(download(args.backend, precision=args.precision, quant=args.quant, release=args.release))
+    return 0
+
+
+def cmd_releases(args: argparse.Namespace) -> int:
+    from . import cascades
+    from .models import ALIASES, DEFAULT_RELEASE, RELEASES
+    if args.json:
+        print(json.dumps({"version": __version__, "default_release": DEFAULT_RELEASE, "releases": {
+            k: {"model_id": r.model_id, "title": r.title, "release_date": r.release_date, "published": r.published,
+                "aliases": [a for a, key in ALIASES.items() if key == k],
+                "builds": {b.backend: {"repo": b.repo, "revision": b.revision} for b in r.builds.values()}}
+            for k, r in RELEASES.items()},
+            "cascades": {n: {**cascades.CASCADES[n], "placeholders": cascades.placeholders(n)}
+                         for n in cascades.names()}}, indent=2))
+        return 0
+    print(f"jev-style {__version__}\n\nmodel releases (--release):")
+    for k, r in RELEASES.items():
+        tags = [a for a, key in ALIASES.items() if key == k] + (["default"] if k == DEFAULT_RELEASE else [])
+        state = r.release_date if r.published else "not published in this version"
+        print(f"  {k:<9} {r.model_id}  ({', '.join(tags)}; {state})")
+        for b in r.builds.values():
+            print(f"      {b.backend:<6} {b.repo} @ {b.revision[:8] if b.revision else 'unpinned'}")
+    print("\nnamed cascades (--cascade NAME):")
+    for n in cascades.names():
+        d, missing = cascades.CASCADES[n], cascades.placeholders(n)
+        state = f"NOT FROZEN in this version, placeholder: {', '.join(missing)}" if missing else \
+            f"frozen {d['frozen_utc']}"
+        print(f"  {n:<11} {d['id']}  ({state})")
+        th = d["thresholds"]
+        for i, t in enumerate(d["tiers"]):
+            rule = "top tier" if i >= len(th) else f"keep if confidence >= {'?' if th[i] is None else th[i]}"
+            rev = f" @ {t['revision'][:8]}" if t.get("revision") else ""
+            print(f"      tier {i + 1}: {t['model_id']} via {t['target']}{rev}, {rule}")
+        if d.get("calibration_sha256"):
+            print(f"      calibration set sha256 {d['calibration_sha256']}")
     return 0
 
 
@@ -204,7 +253,14 @@ def _main(argv: list[str] | None = None) -> int:
     d.add_argument("--backend", default=os.environ.get("JEV_STYLE_BACKEND", "auto"), choices=BACKENDS)
     d.add_argument("--precision", default="bf16", choices=("bf16", "8bit"))
     d.add_argument("--quant", default="Q8_0", choices=("F16", "Q8_0", "Q4_K_M"))
+    d.add_argument("--cascade", metavar="NAME_OR_FILE",
+                   help="download every tier of a cascade instead (--release does not apply; --backend, --precision, "
+                        "--quant are defaults for local tiers)")
     d.set_defaults(func=cmd_download)
+
+    r = sub.add_parser("releases", help="list the model releases and named cascades this version pins")
+    r.add_argument("--json", action="store_true", help="machine-readable, with each named cascade's full config")
+    r.set_defaults(func=cmd_releases)
 
     q = sub.add_parser("decide", help="answer questions about a text from the command line")
     q.add_argument("state", help="the text to judge ('-' reads stdin)")
