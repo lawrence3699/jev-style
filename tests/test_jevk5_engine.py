@@ -280,3 +280,22 @@ def test_eval_engine_and_cli_take_a_jevk5_target(fake_jevk5, tmp_path, capsys):
     bad = make_jevk5_folder(tmp_path / "nocal", config=None)
     assert main(["eval", ex, "--server", "fake", "--server", f"k5=jevk5:{bad}"]) == 2
     assert "jevk5_config.json" in capsys.readouterr().err
+
+
+def test_sha256sums_accepts_a_hub_cache_snapshot_of_symlinks(tmp_path):
+    # A Hugging Face cache snapshot is a folder of symlinks into ../../blobs/: the check follows them.
+    from jev_style.jevk5_engine import verify_sha256sums
+    blobs, snap = tmp_path / "blobs", tmp_path / "snapshots" / "rev"
+    blobs.mkdir()
+    snap.mkdir(parents=True)
+    lines = []
+    for name, data in (("config.json", b"{}"), ("model.safetensors", b"weights")):
+        blob = blobs / hashlib.sha256(data).hexdigest()
+        blob.write_bytes(data)
+        (snap / name).symlink_to(blob)
+        lines.append(f"{hashlib.sha256(data).hexdigest()}  {name}")
+    (snap / "SHA256SUMS").write_text("\n".join(lines) + "\n")
+    assert verify_sha256sums(snap) == 2
+    (blobs / hashlib.sha256(b"weights").hexdigest()).write_bytes(b"tampered")
+    with pytest.raises(Exception, match="sha256 does not match"):
+        verify_sha256sums(snap)

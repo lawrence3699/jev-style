@@ -39,7 +39,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import ModuleType
 from typing import Any
 
@@ -132,14 +132,16 @@ def verify_sha256sums(folder: Path) -> int:
         raise JevK5LoadError(f"{folder} has no {SUMS_FILE} to verify against (pass verify=False, or "
                              '"verify": false on the tier, to load it unchecked)')
     expected = read_sha256sums(sums)
-    root = folder.resolve()
     log.info("JevK5: checking %d file(s) in %s against %s ...", len(expected), folder, SUMS_FILE)
     bad = []
     for name, digest in expected.items():
         if name == SUMS_FILE:
             continue
         f = folder / name
-        if root not in f.resolve().parents:
+        # The listed NAME must stay inside the folder (no absolute paths, no ".."). Where the file finally lives is
+        # not checked: a Hugging Face cache snapshot is a folder of symlinks into the cache's blobs/ directory.
+        parts = PurePosixPath(name).parts
+        if not parts or PurePosixPath(name).is_absolute() or ".." in parts or "\\" in name:
             bad.append(f"{name}: outside the folder")
         elif not f.is_file():
             bad.append(f"{name}: missing")
