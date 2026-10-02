@@ -44,10 +44,11 @@ def test_cascade_9b_is_the_planned_release():
     d = cascades.CASCADES["cascade-9b"]
     assert d["id"] == "jev-style-cascade-9b" and d["confidence"] == "normalized_pmax"
     assert d["tiers"] == [
-        {"name": "2b", "model_id": "jev-style-2b-decision-v3", "target": "local:2b-v3", "dtype": "float32"},
+        {"name": "2b", "model_id": "jev-style-2b-decision-v3", "target": "local:2b-v3:torch", "dtype": "float32"},
         {"name": "jevk5-9b", "model_id": "alibiserikbay/JevK5-9B", "target": "jevk5:alibiserikbay/JevK5-9B",
          "revision": "d6521a18a86999190e9d775c915af3d6d6772fc4"}]
-    assert d["tiers"][1]["revision"] == JEVK5_9B.revision and len(d["thresholds"]) == 1
+    assert d["tiers"][1]["revision"] == JEVK5_9B.revision and d["thresholds"] == [0.75]
+    assert d["frozen_utc"] == "2026-10-02T21:53:31Z"
     assert d["calibration_sha256"] == "580962e4b2bc86b32b42731eda42536f57321c7d1ca9ac1e3b970bf7dbd7e2d2"
     tiers = resolve_tiers("cascade-9b")                         # the tiers parse whether or not tau is frozen
     assert [t.protocol for t in tiers] == ["systemone", "jevk5"] and tiers[0].dtype == "float32"
@@ -106,7 +107,7 @@ def test_cascade_9b_end_to_end_in_process(frozen, fake_2b, fake_jevk5, fake_hub)
     assert entry["calibration_sha256"].startswith("580962e4") and entry["frozen_utc"] == "2026-10-03T00:00:00Z"
     keys = ("name", "model", "target", "revision", "protocol", "threshold")
     assert [tuple(t[k] for k in keys) for t in entry["tiers"]] == [
-        ("2b", "jev-style-2b-decision-v3", "local:2b-v3", None, "systemone", 0.42),
+        ("2b", "jev-style-2b-decision-v3", "local:2b-v3:torch", None, "systemone", 0.42),
         ("jevk5-9b", "alibiserikbay/JevK5-9B", "jevk5:alibiserikbay/JevK5-9B", JEVK5_9B.revision, "jevk5", None)]
     assert entry["tiers"][1]["backend"] == "jevk5-cuda"
     qs = {f"q{i}": {"type": "noul", "instructions": f"statement {i}"} for i in range(12)}
