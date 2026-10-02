@@ -276,18 +276,18 @@ A cascade answers each question with the smallest model that is confident enough
 1. [Jev-Style-2B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3) runs in-process (PyTorch, float32, with [CUDA graphs](#cuda-graphs)) and answers every question;
 2. a question whose confidence is below one threshold τ goes to [JevK5-9B](https://huggingface.co/alibiserikbay/JevK5-9B) v0.3.3 by alibiserikbay (Apache-2.0), which runs in the same process through its own runtime, [allebee/jevk5](https://github.com/allebee/jevk5), at a pinned revision. It runs the same code as `jevk5-serve`, so it gives the same answers as JevK5-9B behind `jevk5-serve`.
 
-<!-- TODO(0.4.0): fill in tau and the numbers below (with the test set and GPU they were measured on). -->
-τ = **TBD**, the same for every question type, was frozen on a calibration set (sha256 `580962e4b2bc86b32b42731eda42536f57321c7d1ca9ac1e3b970bf7dbd7e2d2`).
+τ = **0.75**, the same for every question type, was frozen on a 4,992-question calibration set (sha256 `580962e4b2bc86b32b42731eda42536f57321c7d1ca9ac1e3b970bf7dbd7e2d2`) with a rule written down before any result: the lowest expected latency whose calibration accuracy stays within 1.0 point of JevK5-9B alone. Details, the calibration sources and every number: [chaoliangUNSW/Jev-Style-Cascade-9B](https://huggingface.co/chaoliangUNSW/Jev-Style-Cascade-9B).
 
 | cascade-9b | |
 |---|:---:|
-| Accuracy | **TBD** |
-| Share of questions answered by the 2B | **TBD** |
-| Median latency per request | **TBD** |
+| JevBench public items (231, our run) | **87.9 %** (203 / 231; JevK5-9B alone 203, the 2B alone 170) |
+| Questions answered by the 2B | **53 %** of JevBench items, **43 %** of the calibration set |
+| Calibration set accuracy | 73.1 % (JevK5-9B alone 74.1 %, the 2B alone 66.2 %) |
+| Median latency per request (RTX 5090) | 29 ms on JevBench items, 38 ms on the calibration set |
 
 We do not claim that `cascade-9b` is more accurate than JevK5-9B on its own; what the cascade changes is how many questions reach the 9B at all. JevK5-9B's model card says that part of its training labels came from OpenAI's GPT-6 Luna, generated under OpenAI's terms; check that those terms suit your use.
 
-It needs an NVIDIA GPU with room for both models (the JevK5-9B snapshot is about 19 GB), PyTorch, and the jevk5 package, which is not on PyPI:
+It needs an NVIDIA GPU with room for both models: on an RTX 5090 (32 GB) it used 29.7 GB after start-up and at most 31.8 GB while serving, with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`. It also needs PyTorch and the jevk5 package, which is not on PyPI:
 
 ```bash
 pip install "jev-style[torch]" "jevk5[fast] @ git+https://github.com/allebee/jevk5@v0.3.3"

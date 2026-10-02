@@ -3,9 +3,7 @@
 Versions follow [semantic versioning](https://semver.org/). Each release pins the model revisions it loads
 (`jev_style/models.py`), so upgrading the package is what changes the weights you get.
 
-## 0.4.0 (unreleased)
-
-<!-- TODO(0.4.0): the release date, and the two new torch revisions below -->
+## 0.4.0 (2026-10-03)
 
 - **CUDA graphs for the PyTorch backend, on by default.** On CUDA the torch runtime records CUDA graphs at start-up
   and replays them. Measured on an RTX 5090 in float32 on 4,992 calibration questions against the ordinary path:
@@ -15,7 +13,8 @@ Versions follow [semantic versioning](https://semver.org/). Each release pins th
   (auto = on when the model runs on CUDA), `$JEV_STYLE_CUDA_GRAPHS`, `cuda_graphs=` in `JevStyle` and
   `models.load_release`. A runtime without the CUDA-graph path loads as before under `auto`; `on` is refused there.
 - **New torch pins.** The PyTorch builds of `0.8b-v3` and `2b-v3` are pinned to revisions that ship the CUDA-graph
-  runtime (TODO). The MLX and GGUF pins are unchanged.
+  runtime: `0.8b-v3` torch @ b023d1f9, `2b-v3` torch @ 5bad2d53 (the 0.8B pin before that, d53c8f82, failed
+  `verify=True` because of a stray manifest entry). The MLX and GGUF pins are unchanged.
 - **Confidence cascades** (`jev_style.cascade`). A `cascade.json` lists tiers (smallest first: an in-process release,
   a Hub repo, or any `POST /v1/systemone` server) and one threshold per tier below the top. Tier 1 answers every
   question in one call; questions below its threshold (normalized p_max computed from the probabilities, never the
