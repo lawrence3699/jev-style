@@ -191,3 +191,37 @@ def test_2b_mlx_needs_the_pinned_mlx_lm(monkeypatch):
     assert models.resolve_backend("auto", "0.8b") == "mlx"
     monkeypatch.setattr(models, "_installed_version", lambda dist: "0.31.3")
     assert models.resolve_backend("auto", "2b") == "mlx"
+
+
+class _GraphRuntime:                    # a runtime that has the CUDA-graph option (the torch builds since 0.4.0)
+    def __init__(self, folder, device=None, dtype="float32", verify=False, cuda_graphs=False):
+        self.kw = {"device": device, "dtype": dtype, "verify": verify, "cuda_graphs": cuda_graphs}
+
+
+class _GraphModule:
+    JevStyleDecision = _GraphRuntime
+
+
+def test_cuda_graphs_follow_the_device_unless_told(monkeypatch, tmp_path):
+    monkeypatch.setattr(models, "import_runtime", lambda folder, module: _GraphModule)
+    monkeypatch.setattr(models, "require_backend", lambda build: None)
+    monkeypatch.delenv("JEV_STYLE_CUDA_GRAPHS", raising=False)
+
+    def graphs(**kw):
+        return models.load_release("torch", release="2b", model_dir=tmp_path, **kw)[0].kw["cuda_graphs"]
+
+    assert graphs(device="cpu") is False
+    assert graphs(device="cuda") is True and graphs(device="cuda:1") is True
+    assert graphs(device="cuda", cuda_graphs=False) is False
+    monkeypatch.setenv("JEV_STYLE_CUDA_GRAPHS", "0")
+    assert graphs(device="cuda") is False
+    assert graphs(device="cuda", cuda_graphs=True) is True          # an explicit choice beats the environment
+
+
+def test_cuda_graphs_on_an_old_runtime(monkeypatch, tmp_path):
+    monkeypatch.setattr(models, "import_runtime", lambda folder, module: _Module)
+    monkeypatch.setattr(models, "require_backend", lambda build: None)
+    runtime, _, _ = models.load_release("torch", release="2b", model_dir=tmp_path, device="cuda")
+    assert "cuda_graphs" not in runtime.kw                           # auto: an old runtime loads as before
+    with pytest.raises(ValueError, match="no CUDA-graph path"):
+        models.load_release("torch", release="2b", model_dir=tmp_path, device="cuda", cuda_graphs=True)

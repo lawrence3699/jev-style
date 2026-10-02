@@ -24,6 +24,7 @@ caller passes ``trust_remote_code=True``; the same flag lets a release that is n
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import os
 import platform
 import sys
@@ -253,9 +254,14 @@ def import_runtime(model_dir: Path, module: str) -> ModuleType:
 def load_release(backend: str = "auto", *, release: str | None = None, model_dir: str | Path | None = None,
                  device: str | None = None, dtype: str = "float32", precision: str = "bf16", quant: str = "Q8_0",
                  scorer: str | None = None, revision: str | None = None, verify: bool = False,
-                 repo: str | None = None, trust_remote_code: bool = False) -> tuple[Any, ModuleType, Build]:
+                 repo: str | None = None, trust_remote_code: bool = False,
+                 cuda_graphs: bool | None = None) -> tuple[Any, ModuleType, Build]:
     """-> (runtime object, runtime module, build). ``model_dir`` skips the download; ``repo`` picks the build (and
-    so the release and backend) from a Hub repo id instead of ``release`` and ``backend``."""
+    so the release and backend) from a Hub repo id instead of ``release`` and ``backend``.
+
+    ``cuda_graphs`` (torch backend): True / False, or None = $JEV_STYLE_CUDA_GRAPHS if set, else on whenever the
+    model runs on CUDA. Runtimes older than the CUDA-graph releases do not take the option: then None / False load
+    them as before and True is refused."""
     if repo:
         build = build_for_repo(repo, trust_remote_code=trust_remote_code)
     else:
@@ -269,12 +275,30 @@ def load_release(backend: str = "auto", *, release: str | None = None, model_dir
     cls = getattr(rt, build.cls)
     if backend == "torch":
         device = device or os.environ.get("JEV_STYLE_DEVICE") or os.environ.get("JEV_DEVICE") or None
-        runtime = cls(folder, device=device, dtype=dtype, verify=verify)
+        kw = {}
+        if "cuda_graphs" in inspect.signature(cls).parameters:
+            kw["cuda_graphs"] = _want_cuda_graphs(cuda_graphs, device)
+        elif cuda_graphs:
+            raise ValueError(f"the {build.repo} runtime at this revision has no CUDA-graph path (cuda_graphs=True)")
+        runtime = cls(folder, device=device, dtype=dtype, verify=verify, **kw)
     elif backend == "mlx":
         runtime = cls(folder, precision=precision, verify=verify)
     else:
         runtime = cls(folder, quant=quant.upper(), binary=scorer, verify=verify)  # None: the runtime's own lookup
     return runtime, rt, build
+
+
+def _want_cuda_graphs(flag: bool | None, device: str | None) -> bool:
+    if flag is None:
+        env = os.environ.get("JEV_STYLE_CUDA_GRAPHS", "").strip().lower()
+        if env:
+            flag = env not in ("0", "false", "no", "off")
+    if flag is not None:
+        return bool(flag)
+    if device:
+        return str(device).split(":", 1)[0] == "cuda"
+    import torch
+    return torch.cuda.is_available()                # the runtime's own default: cuda > mps > cpu
 
 
 def load(backend: str = "auto", **kw: Any) -> tuple[Any, ModuleType, str]:
