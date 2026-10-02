@@ -162,10 +162,11 @@ def cmd_guard(argv: list[str]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     from .cascade import CascadeConfigError
+    from .jevk5_engine import JevK5LoadError
     from .models import MissingBackendError
     try:
         return _main(argv)
-    except (MissingBackendError, CascadeConfigError) as e:
+    except (MissingBackendError, CascadeConfigError, JevK5LoadError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 

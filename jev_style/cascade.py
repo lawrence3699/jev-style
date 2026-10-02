@@ -1,8 +1,9 @@
 """Confidence cascade: each question is answered by the smallest tier that is confident enough.
 
 A cascade is an ordered list of tiers (small -> large), each a systemone engine: an in-process release
-(``local:2b-v3``), a Jev-Style repo (``hf:<repo>``) or any server that implements ``POST /v1/systemone``
-(``http://host:port``: ``jev-style serve``, ``jevk5-serve``, ...). One request::
+(``local:2b-v3``), a Jev-Style repo (``hf:<repo>``), JevK5 in-process (``jevk5:<repo or folder>``, see
+``jev_style.jevk5_engine``) or any server that implements ``POST /v1/systemone`` (``http://host:port``:
+``jev-style serve``, ``jevk5-serve``, ...). One request::
 
     tier 1 answers every question in ONE call (the state is read once)
     the questions it was unsure of (or failed on) go to tier 2 in ONE call: same state, only those questions
@@ -64,7 +65,7 @@ log = logging.getLogger("jev_style.cascade")
 
 CONFIDENCE_RULES = ("normalized_pmax",)
 PROTOCOLS = ("systemone", "jevk5")          # jevk5: allebee/jevk5 ``jevk5-serve`` (see ``jevk5_questions``)
-TIER_TARGET_KINDS = ("local", "hf", "http", "fake")
+TIER_TARGET_KINDS = ("local", "hf", "http", "fake", "jevk5")
 
 
 class CascadeConfigError(ValueError):
@@ -518,7 +519,8 @@ class CascadeAdapter:
 # ----------------------------------------------------------------------------- config
 _TOP_KEYS = {"id", "description", "tiers", "thresholds", "confidence", "frozen_utc", "calibration_sha256", "$schema"}
 _TOP_REQUIRED = ("id", "description", "tiers", "thresholds")
-_TIER_KEYS = {"name", "model_id", "target", "revision", "max_options", "protocol", "api_key_env", "timeout_s", "dtype"}
+_TIER_KEYS = {"name", "model_id", "target", "revision", "max_options", "protocol", "api_key_env", "timeout_s", "dtype",
+              "verify"}
 TIER_DTYPES = ("float32", "bfloat16")
 _TIER_REQUIRED = ("name", "model_id", "target")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -528,13 +530,17 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 class TierConfig:
     name: str                           # short, unique within the cascade ("2b", "jevk5-9b")
     model_id: str                       # reported as tier_model; sent as "model" to the tier
-    target: str                         # local[:release][:backend] | hf:<repo> | http(s)://host:port | fake
-    revision: str | None = None         # local / hf: the Hub revision to load; http: recorded only
+    target: str                         # local[:release][:backend] | hf:<repo> | jevk5:<repo or folder>
+                                        # | http(s)://host:port | fake
+    revision: str | None = None         # local / hf / jevk5: the Hub revision to load; http: recorded only
     max_options: int | None = None      # questions with more options are not sent to this tier
-    protocol: str = "systemone"         # "jevk5": shape questions for jevk5-serve (see jevk5_questions)
+    protocol: str = "systemone"         # "jevk5": shape questions for JevK5 (see jevk5_questions); jevk5: targets
+                                        # always use it
     api_key_env: str | None = None      # http: bearer token read from this environment variable
     timeout_s: float | None = None      # http: request timeout (default 120 s)
     dtype: str | None = None            # local / hf torch tiers: "float32" | "bfloat16" (overrides --dtype)
+    verify: bool | None = None          # local / hf: the runtime's manifest check (default off); jevk5: SHA256SUMS
+                                        # (default on for the pinned release, see jevk5_engine)
 
 
 @dataclass(frozen=True)
@@ -588,7 +594,7 @@ class CascadeConfig:
         tiers = []
         for t in self.tiers:
             row = {"name": t.name, "model_id": t.model_id, "target": t.target}
-            for k in ("revision", "max_options", "api_key_env", "timeout_s", "dtype"):
+            for k in ("revision", "max_options", "api_key_env", "timeout_s", "dtype", "verify"):
                 if getattr(t, k) is not None:
                     row[k] = getattr(t, k)
             if t.protocol != "systemone":
@@ -655,7 +661,7 @@ def _tier(t: Any, i: int) -> TierConfig:
         raise CascadeConfigError(f"{where}.target: {e}") from None
     if kind not in TIER_TARGET_KINDS:
         raise CascadeConfigError(f"{where}.target: a tier must be local[:release][:backend], hf:<repo>, "
-                                 f"http(s)://... or fake (got {kind!r})")
+                                 f"jevk5:<repo or folder>, http(s)://... or fake (got {kind!r})")
     if kind == "local" and "release" in kw:
         from .models import get_release
         try:
@@ -668,9 +674,12 @@ def _tier(t: Any, i: int) -> TierConfig:
     mo = t.get("max_options")
     if mo is not None and (isinstance(mo, bool) or not isinstance(mo, int) or mo < 1):
         raise CascadeConfigError(f"{where}.max_options must be a positive integer or null, got {mo!r}")
-    proto = t.get("protocol", "systemone")
+    proto = t.get("protocol", "jevk5" if kind == "jevk5" else "systemone")
     if proto not in PROTOCOLS:
         raise CascadeConfigError(f"{where}.protocol must be one of {list(PROTOCOLS)}, got {proto!r}")
+    if kind == "jevk5" and proto != "jevk5":
+        raise CascadeConfigError(f"{where}.protocol: a jevk5: target answers as jevk5-serve does, so its protocol is "
+                                 f"'jevk5' (got {proto!r})")
     key_env, timeout = t.get("api_key_env"), t.get("timeout_s")
     if (key_env is not None or timeout is not None) and kind != "http":
         raise CascadeConfigError(f"{where}: api_key_env / timeout_s only apply to http(s) targets")
@@ -684,7 +693,14 @@ def _tier(t: Any, i: int) -> TierConfig:
             raise CascadeConfigError(f"{where}.dtype only applies to local / hf tiers")
         if dtype not in TIER_DTYPES:
             raise CascadeConfigError(f"{where}.dtype must be one of {list(TIER_DTYPES)}, got {dtype!r}")
-    return TierConfig(name, model_id, target, rev, mo, proto, key_env, float(timeout) if timeout else None, dtype)
+    verify = t.get("verify")
+    if verify is not None:
+        if kind not in ("local", "hf", "jevk5"):
+            raise CascadeConfigError(f"{where}.verify only applies to local / hf / jevk5 tiers")
+        if not isinstance(verify, bool):
+            raise CascadeConfigError(f"{where}.verify must be true, false or null, got {verify!r}")
+    return TierConfig(name, model_id, target, rev, mo, proto, key_env, float(timeout) if timeout else None, dtype,
+                      verify)
 
 
 def build_tier(cfg: TierConfig, *, backend: str = "auto", **load_kw: Any) -> Tier:
@@ -706,5 +722,10 @@ def build_tier(cfg: TierConfig, *, backend: str = "auto", **load_kw: Any) -> Tie
             kw["revision"] = cfg.revision
         if cfg.dtype:
             kw["dtype"] = cfg.dtype
+        if cfg.verify is not None:
+            kw["verify"] = cfg.verify
+    elif kind == "jevk5":                   # jevk5-serve's own settings: the loader defaults do not apply
+        kw.update(revision=cfg.revision, verify=cfg.verify)
     engine = from_target(cfg.target, backend=backend, **kw)
     return Tier(cfg.name, cfg.model_id, engine, cfg.max_options, cfg.protocol, cfg.target, cfg.revision)
+
