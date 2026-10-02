@@ -1,6 +1,7 @@
 """``jev-style`` command line.
 
     jev-style serve                      start the local server (API + Playground) on :8765
+    jev-style serve --cascade c.json     serve a confidence cascade of several models (see jev_style.cascade)
     jev-style decide "text" --noul "Is this about billing?"
     jev-style download [--backend mlx]   fetch the weights ahead of time
     jev-style guard [--check CMD]        Claude Code PreToolUse hook
@@ -42,11 +43,31 @@ def _model_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--scorer", help="gguf backend: path to the release's scorer binary (0.8b: jev-score, default "
                                       "$JEV_SCORE_BIN; 2b: jev-score-v2, default $JEV_SCORE_V2_BIN)")
     ap.add_argument("--fake", action="store_true", help="deterministic fake engine, no model (tests / UI work)")
+    ap.add_argument("--cascade", metavar="CASCADE_JSON",
+                    help="a confidence cascade file: its tiers name their own models (--release / --model-dir do not "
+                         "apply; --backend, --device, --dtype, --precision, --quant are defaults for local tiers)")
 
 
 def _load_kw(args: argparse.Namespace) -> dict[str, Any]:
     return {"release": args.release, "model_dir": args.model_dir, "device": args.device, "dtype": args.dtype,
             "precision": args.precision, "quant": args.quant, "scorer": args.scorer}
+
+
+def _tier_kw(args: argparse.Namespace) -> dict[str, Any]:
+    """Loader defaults for a cascade's local tiers (the release, folder and scorer are per tier)."""
+    return {"device": args.device, "dtype": args.dtype, "precision": args.precision, "quant": args.quant}
+
+
+def _cascade_conflict(args: argparse.Namespace) -> str | None:
+    if args.cascade and (args.fake or args.model_dir):
+        return "--cascade takes its models from the cascade file; drop --fake / --model-dir"
+    return None
+
+
+def _print_tiers(a: Any) -> None:
+    for t in a.tier_info():
+        keep = f"keep if confidence >= {t['threshold']}" if t["threshold"] is not None else "top tier"
+        print(f"  tier {t['tier']}: {t['model']} via {t['target']} ({t['backend']}), {keep}", flush=True)
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
@@ -57,12 +78,22 @@ def cmd_serve(args: argparse.Namespace) -> int:
         if not api_key:
             print(f"error: environment variable {args.api_key_env} is empty or unset", file=sys.stderr)
             return 2
+    conflict = _cascade_conflict(args)
+    if conflict:
+        print(f"error: {conflict}", file=sys.stderr)
+        return 2
     from .server import build_app
-    print("loading the model (the first run downloads it) ..." if not args.fake else "fake engine", flush=True)
-    app = build_app(args.backend, fake=args.fake, api_key=api_key, **({} if args.fake else _load_kw(args)))
+    if args.cascade:
+        print(f"loading the cascade {args.cascade} (the first run downloads its local models) ...", flush=True)
+        app = build_app(args.backend, api_key=api_key, cascade=args.cascade, **_tier_kw(args))
+    else:
+        print("loading the model (the first run downloads it) ..." if not args.fake else "fake engine", flush=True)
+        app = build_app(args.backend, fake=args.fake, api_key=api_key, **({} if args.fake else _load_kw(args)))
     a = app.state.adapter
     print(f"Jev-Style server: model={a.model_id} backend={a.backend} context={a.max_len} "
           f"auth={'on' if api_key else 'off'} -> http://{args.host}:{args.port}/", flush=True)
+    if args.cascade:
+        _print_tiers(a)
     for e in app.state.ext_errors:
         print(f"warning: extension {e['slug']} not loaded: {e['error']}", file=sys.stderr)
     import uvicorn
@@ -93,9 +124,16 @@ def cmd_decide(args: argparse.Namespace) -> int:
     if not qs:
         print("error: give at least one --noul, --choice or --score", file=sys.stderr)
         return 2
+    conflict = _cascade_conflict(args)
+    if conflict:
+        print(f"error: {conflict}", file=sys.stderr)
+        return 2
     url = args.url or os.environ.get("JEV_STYLE_URL")
-    js = JevStyle(base_url=url) if url else JevStyle(backend=args.backend, fake=args.fake,
-                                                     **({} if args.fake else _load_kw(args)))
+    if args.cascade and not args.url:
+        js = JevStyle(cascade=args.cascade, backend=args.backend, **_tier_kw(args))
+    else:
+        js = JevStyle(base_url=url) if url else JevStyle(backend=args.backend, fake=args.fake,
+                                                         **({} if args.fake else _load_kw(args)))
     try:
         out = js.decide(state, qs)
     except JevStyleError as e:
@@ -119,10 +157,11 @@ def cmd_guard(argv: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from .cascade import CascadeConfigError
     from .models import MissingBackendError
     try:
         return _main(argv)
-    except MissingBackendError as e:
+    except (MissingBackendError, CascadeConfigError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 

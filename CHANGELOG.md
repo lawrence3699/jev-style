@@ -3,6 +3,26 @@
 Versions follow [semantic versioning](https://semver.org/). Each release pins the model revisions it loads
 (`jev_style/models.py`), so upgrading the package is what changes the weights you get.
 
+## Unreleased
+
+- **Confidence cascades** (`jev_style.cascade`). A `cascade.json` lists tiers (smallest first: an in-process release,
+  a Hub repo, or any `POST /v1/systemone` server) and one threshold per tier below the top. Tier 1 answers every
+  question in one call; questions below its threshold (normalized p_max computed from the probabilities, never the
+  tier's own `confidence`), or that it failed on, go to the next tier in one call with the same state. The top tier
+  is final; if it fails, the last successful answer is used; if every tier fails, the error is returned as a single
+  model would return it (plus `tier`, `tier_model`, `tier_errors`). Optional per-tier `max_options`. Answers add
+  `tier` and `tier_model`, `timing.tiers` reports each tier; `model` is the cascade id, `backend` is `cascade`.
+  `select()` replays recorded per-tier answers offline with the same rules.
+- `jev-style serve --cascade FILE`, `jev-style decide --cascade FILE`, `JevStyle(cascade=FILE)`, and the eval engine
+  `NAME=cascade:FILE`.
+- **JevK5 tiers.** `"protocol": "jevk5"` talks to allebee/jevk5's `jevk5-serve` (0.3.x): structured option
+  descriptions are sent as text, single-option choices are not sent (it rejects them), its `{"error": "<message>"}`
+  bodies and its answer shapes (no `legend`, `confidence` = p_max) are read correctly. `examples/cascade/` holds a
+  2B -> JevK5-9B and a 0.8B -> 2B -> JevK5-9B file (placeholder thresholds); `scripts/cascade_smoke.py` runs one on
+  fake engines.
+- `jev_style.client.parse_target` / `from_target`: one resolver for engine targets, shared by `eval --server` and the
+  cascade tiers. The HTTP client now reports `{"error": "<message>"}` bodies by their message.
+
 ## 0.3.0 (2026-09-27)
 
 - **Jev-Style-2B-Decision-v3.** `--release 2b` (or `JevStyle(release="2b")`, or `from_pretrained` with any of its

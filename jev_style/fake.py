@@ -50,8 +50,9 @@ class _Renderer:
 class FakeRuntime:
     backend = "fake"
 
-    def __init__(self) -> None:
+    def __init__(self, salt: str = "") -> None:
         self.renderer = _Renderer()
+        self.salt = salt            # a different salt = a different (still deterministic) "model"
 
     def decide_many(self, state: Any, questions: list[dict], category: str | None = None) -> list[dict]:
         s = state if isinstance(state, str) else json.dumps(state, ensure_ascii=False)
@@ -66,11 +67,57 @@ class FakeRuntime:
                 raise InputBudgetError(f"input needs {n_state + head} tokens; max_len={CONTEXT_LIMIT}")
             raw = []
             for n in names:
-                h = hashlib.sha256(f"{s}\x00{q.get('ins')}\x00{n}".encode()).digest()
-                raw.append(int.from_bytes(h[:4], "big") / 2**32 * 4.0)
-            m = max(raw)
-            e = [math.exp(x - m) for x in raw]
-            z = sum(e)
-            out.append({"answer": names[e.index(max(e))], "probabilities": {n: v / z for n, v in zip(names, e)},
+                raw.append(_score(self.salt + s, q.get("ins"), n))
+            probs = _softmax(raw)
+            out.append({"answer": names[probs.index(max(probs))], "probabilities": dict(zip(names, probs)),
                         "input_tokens": n_state + head, "head_tokens": head})
         return out
+
+
+def _score(state: str, ins: Any, option: str) -> float:
+    h = hashlib.sha256(f"{state}\x00{ins}\x00{option}".encode()).digest()
+    return int.from_bytes(h[:4], "big") / 2**32 * 4.0
+
+
+def _softmax(raw: list[float]) -> list[float]:
+    m = max(raw)
+    e = [math.exp(x - m) for x in raw]
+    z = sum(e)
+    return [v / z for v in e]
+
+
+def jevk5_response(body: Any, salt: str = "jevk5", model: str = "alibiserikbay/JevK5-9B") -> dict:
+    """What ``jevk5-serve`` (allebee/jevk5 0.3.3) returns for ``body``, with hash-based probabilities. Same shapes:
+    every answer has ``confidence`` = p_max; noul carries only ``noul``; choice ``choice`` + ``probabilities``;
+    score ``score`` + ``probabilities`` keyed "0".."K-1" (no ``legend``); ``usage`` has no ``state_tokens``.
+    Invalid input raises ValueError (the real server answers 400 ``{"error": "<message>"}``)."""
+    if not isinstance(body, dict) or "state" not in body or not isinstance(body.get("questions"), dict):
+        raise ValueError("'state'" if isinstance(body, dict) and "state" not in body else "'questions'")
+    s = body["state"] if isinstance(body["state"], str) else json.dumps(body["state"], ensure_ascii=False)
+    answers, tokens = {}, 0
+    for qid, q in body["questions"].items():
+        t, crit = q.get("type"), q.get("criteria")
+        if t not in ("noul", "choice", "score"):
+            raise ValueError(f"unknown question type {t!r}")
+        if "instructions" not in q:
+            raise ValueError("question is missing instructions")
+        if t == "choice":
+            crit = dict.fromkeys(crit) if isinstance(crit, list) else crit
+            if not isinstance(crit, dict) or len(crit) < 2:
+                raise ValueError("choice criteria must name at least two options")
+        if t == "score" and (not isinstance(crit, list) or len(crit) < 2):
+            raise ValueError("score criteria must list at least two levels")
+        names = (["true", "false"] if t == "noul" else list(crit) if t == "choice"
+                 else [str(i) for i in range(len(crit))])
+        probs = dict(zip(names, _softmax([_score(salt + s, json.dumps(q.get("instructions")), n) for n in names])))
+        a: dict[str, Any] = {"type": t, "confidence": max(probs.values())}
+        if t == "noul":
+            a["noul"] = probs["true"]
+        elif t == "choice":
+            a.update(choice=max(probs, key=probs.get), probabilities=probs)
+        else:
+            a.update(score=sum(int(k) * v for k, v in probs.items()), probabilities=probs)
+        answers[qid] = a
+        tokens += _tokens(s) + 8 * len(names)
+    return {"model": body.get("model") or model, "answers": answers,
+            "usage": {"input_tokens": tokens, "output_tokens": 0}, "latency_ms": 0.1}

@@ -33,8 +33,9 @@ e.g. this package's local model, ``jev-style serve`` on another machine, or any 
 
 Each spec is ``NAME=URL`` (http/https), ``NAME=local[:release][:backend]`` such as ``local:mlx`` or ``local:2b:mlx``
 (in-process),
-``NAME=hf:<repo id>`` (in-process, a Jev-Style release by repo id) or ``NAME=fake``; a bare ``local`` or ``fake``
-is its own name. The first engine is the reference. Every engine is scored on the same questions: the ones every
+``NAME=hf:<repo id>`` (in-process, a Jev-Style release by repo id), ``NAME=cascade:<cascade.json>`` (a confidence
+cascade, see ``jev_style.cascade``) or ``NAME=fake``; a bare ``local`` or ``fake`` is its own name. The first
+engine is the reference. Every engine is scored on the same questions: the ones every
 engine answered (a row an engine rejects, e.g. too long or too many options, is dropped for all and counted).
 Differences to the reference come with a 95 % paired bootstrap interval over rows.
 """
@@ -359,8 +360,8 @@ def parse_server(spec: str) -> tuple[str, str]:
     if not sep:
         if spec.split(":", 1)[0] in ("local", "fake"):
             return spec, spec
-        raise ValueError(f"--server {spec!r}: expected NAME=URL, NAME=local[:release][:backend], NAME=hf:<repo> "
-                         "or NAME=fake")
+        raise ValueError(f"--server {spec!r}: expected NAME=URL, NAME=local[:release][:backend], NAME=hf:<repo>, "
+                         "NAME=cascade:<path> or NAME=fake")
     if not name or not target:
         raise ValueError(f"--server {spec!r}: empty name or target")
     return name, target
@@ -377,25 +378,9 @@ def _keyed(pairs: list[str] | None, flag: str) -> dict[str, str]:
 
 
 def build_engine(target: str, backend: str, api_key: str | None = None, model: str | None = None):
-    from .client import JevStyle
-    if target.startswith(("http://", "https://")):
-        js = JevStyle(base_url=target, api_key=api_key)
-    elif target == "fake":
-        js = JevStyle(fake=True)
-    elif target.startswith("hf:"):
-        js = JevStyle.from_pretrained(target[3:])
-    elif target.split(":", 1)[0] == "local":
-        kw: dict = {"backend": backend}
-        for part in target.split(":")[1:]:
-            if part in ("auto", "torch", "mlx", "gguf"):
-                kw["backend"] = part
-            elif part:
-                kw["release"] = part
-            else:
-                raise ValueError(f"engine target {target!r}: empty part")
-        js = JevStyle(**kw)
-    else:
-        raise ValueError(f"unknown engine target {target!r}")
+    """A ``decide(state, questions)`` callable for an engine target (``jev_style.client.parse_target``)."""
+    from .client import from_target
+    js = from_target(target, backend=backend, api_key=api_key)
     return lambda state, qs: js.decide(state, qs, model=model)
 
 

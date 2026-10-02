@@ -41,7 +41,7 @@ class _Static(StaticFiles):
         await super().__call__(scope, receive, send)
 
 
-def create_app(adapter: Adapter, *, api_key: str | None = None, web_dir: Path = discovery.WEB_DIR,
+def create_app(adapter: Adapter | Any, *, api_key: str | None = None, web_dir: Path = discovery.WEB_DIR,
                demos_dir: Path | None = None, demo_data_dir: Path = DEMO_DATA_DIR,
                ext_dir: Path | None = discovery.EXT_DIR, ext_package: str = "jev_style.ext") -> FastAPI:
     web_dir = Path(web_dir)
@@ -116,7 +116,13 @@ def create_app(adapter: Adapter, *, api_key: str | None = None, web_dir: Path = 
     return app
 
 
-def build_app(backend: str = "auto", *, fake: bool = False, api_key: str | None = None, **load_kw: Any) -> FastAPI:
-    """Load the model (or the fake engine) and return the app."""
+def build_app(backend: str = "auto", *, fake: bool = False, api_key: str | None = None, cascade: Any = None,
+              **load_kw: Any) -> FastAPI:
+    """Load the model (or the fake engine, or every tier of a cascade file) and return the app."""
+    if cascade is not None:
+        if fake:
+            raise ValueError("cascade and fake cannot be combined (use 'fake' tier targets instead)")
+        from .cascade import CascadeAdapter
+        return create_app(CascadeAdapter.from_config(cascade, backend=backend, **load_kw), api_key=api_key)
     from .adapter import build_adapter
     return create_app(build_adapter(backend, fake=fake, **load_kw), api_key=api_key)

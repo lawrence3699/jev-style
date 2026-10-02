@@ -247,7 +247,7 @@ difference to bf16 (95 % paired bootstrap over rows; brier: lower is better):
   q8               accuracy  +0.0 pts [+0.0, +0.0]   brier +0.001 [-0.001, +0.002]
 ```
 
-That run compares the MLX bf16 weights in-process with `jev-style serve --precision 8bit` on an Apple M1 Max. Engine specs are `NAME=URL`, `NAME=local[:backend]`, `NAME=hf:<repo id>` or `NAME=fake`; `--key NAME=ENV_VAR` sends a bearer token from an environment variable and `--model NAME=MODEL` sets the request's `model` field. Every engine is scored on the same questions: if one engine rejects a row (too long, too many options), that row is dropped for all of them and counted under `failed rows`. `--json PATH` writes every answer.
+That run compares the MLX bf16 weights in-process with `jev-style serve --precision 8bit` on an Apple M1 Max. Engine specs are `NAME=URL`, `NAME=local[:backend]`, `NAME=hf:<repo id>`, `NAME=cascade:<file>` or `NAME=fake`; `--key NAME=ENV_VAR` sends a bearer token from an environment variable and `--model NAME=MODEL` sets the request's `model` field. Every engine is scored on the same questions: if one engine rejects a row (too long, too many options), that row is dropped for all of them and counted under `failed rows`. `--json PATH` writes every answer.
 
 ## API
 
@@ -260,6 +260,17 @@ That run compares the MLX bf16 weights in-process with `jev-style serve --precis
 | `score` | 2 to 10 levels, lowest first: `"label"` or `{"label", "description"}` | `score` = expected level index, `legend`, `probabilities`, `confidence` |
 
 `confidence = (k · p_max − 1) / (k − 1)` for k options: 0 when the probabilities are uniform, 1 when one option takes all of them. The other routes are `GET /v1/models`, `GET /healthz` and the Playground at `/`. Errors look like `{"error": {"code", "message", "question"?}}` and use HTTP 422 (`invalid_json`, `invalid_request`, `invalid_question`, `input_budget_exceeded`), 401 (`unauthorized`), 404 or 500. Start the server with `--api-key-env NAME` to require `Authorization: Bearer <key>`. The full reference is [skills/jev-style/reference.md](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style/reference.md).
+
+## Cascades
+
+A cascade answers each question with the smallest model that is confident enough and sends only the rest to a larger one, for example the 2B in-process and [JevK5-9B](https://huggingface.co/alibiserikbay/JevK5-9B) behind its own `jevk5-serve`:
+
+```bash
+jevk5-serve --model alibiserikbay/JevK5-9B --port 8090        # on the GPU box (see allebee/jevk5)
+jev-style serve --cascade examples/cascade/glue-2.json --backend torch --device cuda
+```
+
+The file lists the tiers (smallest first) and one threshold per tier below the top. Tier 1 answers every question in one call; a question whose confidence `(k · p_max − 1) / (k − 1)` (for noul `|2 · P(true) − 1|`) is below the tier's threshold, or that the tier failed on, goes to the next tier in one call with the same state. The top tier's answer is final; if it fails, the last answer that succeeded is used, and only if every tier failed is the error returned. Answers keep the usual schema and add `tier` and `tier_model`; `timing.tiers` reports each tier's calls. Tier targets are `local[:release][:backend]`, `hf:<repo id>`, `http(s)://...` (`"protocol": "jevk5"` for `jevk5-serve`) or `fake`; `"max_options"` keeps questions with more options away from a tier. The same file works as `JevStyle(cascade="glue-2.json")`, `jev-style decide --cascade` and `jev-style eval --server glue=cascade:glue-2.json`. The thresholds in `examples/cascade/` are placeholders, not calibrated values. `jev_style.cascade.select()` replays recorded per-tier answers offline with the same rules.
 
 ## Backends
 
@@ -278,7 +289,8 @@ That run compares the MLX bf16 weights in-process with `jev-style serve --precis
 jev_style/           server, client, CLI, guard, MCP server, eval; web/ = Playground + demos
 skills/              six agent skills (npx skills add lawrence3699/jev-style)
 plugins/             Claude Code guard plugin (the root .claude-plugin/ is the marketplace)
-examples/            labelled example data for jev-style eval
+examples/            labelled example data for jev-style eval; cascade/ = example cascade files
+scripts/             cascade_smoke.py: a two-tier cascade on fake engines, prints one routed response
 space/               source of the Hugging Face Space
 tests/               pytest suite, runs on the fake engine (no model download)
 ```

@@ -7,6 +7,8 @@
     js = JevStyle.from_pretrained("chaoliangUNSW/Jev-Style-0.8B-Decision-v3-GGUF")   # pick the build by repo id
     js = JevStyle(base_url="http://127.0.0.1:8765")      # over HTTP: jev-style serve, or another server
                                                          # that implements POST /v1/systemone
+    js = JevStyle(cascade="cascade.json")                # a confidence cascade of several models
+                                                         # (see jev_style.cascade)
     out = js.decide("I was charged twice.", {
         "billing": noul("Is this about billing?"),
         "team": choice("Which team?", {"billing": None, "tech": "bugs, outages"}),
@@ -56,13 +58,19 @@ def score(instructions: Any, levels: Iterable[Any]) -> dict:
 
 class JevStyle:
     def __init__(self, base_url: str | None = None, backend: str = "auto", fake: bool = False,
-                 api_key: str | None = None, timeout: float = 120.0, http_client: Any = None, **load_kw: Any):
+                 api_key: str | None = None, timeout: float = 120.0, http_client: Any = None,
+                 cascade: Any = None, **load_kw: Any):
         self.base_url = base_url.rstrip("/") if base_url else None
         self.api_key = api_key if api_key is not None else os.environ.get("JEV_STYLE_API_KEY")
         self.timeout = timeout
         self._http = http_client
         self._adapter = None
-        if self.base_url is None and http_client is None:
+        if cascade is not None:             # a cascade file / dict; backend and load_kw go to its local tiers
+            if self.base_url or fake or http_client is not None:
+                raise ValueError("cascade cannot be combined with base_url, http_client or fake")
+            from .cascade import CascadeAdapter
+            self._adapter = CascadeAdapter.from_config(cascade, backend=backend, **load_kw)
+        elif self.base_url is None and http_client is None:
             from .adapter import build_adapter
             self._adapter = build_adapter(backend, fake=fake, **load_kw)
 
@@ -90,6 +98,8 @@ class JevStyle:
         except ValueError:
             body = {}
         err = body.get("error") if isinstance(body, dict) else None
+        if isinstance(err, str):                # servers that answer {"error": "<message>"} (e.g. jevk5-serve)
+            err = {"message": err}
         err = err if isinstance(err, dict) else {}
         raise JevStyleError(resp.status_code, err.get("code", "http_error"), err.get("message", resp.text[:500]),
                           err.get("question"), body)
@@ -127,6 +137,54 @@ class JevStyle:
 
     def __exit__(self, *exc: Any) -> None:
         self.close()
+
+
+# -- engine targets ---------------------------------------------------------------------------------
+TARGETS = "http(s)://host:port, local[:release][:backend], hf:<repo id>, fake or cascade:<path>"
+
+
+def parse_target(target: str) -> tuple[str, dict]:
+    """An engine target -> (kind, JevStyle keyword arguments), without loading anything. Kinds: ``http``
+    (``http(s)://...``), ``fake``, ``hf`` (``hf:<repo id>``), ``local`` (``local[:release][:backend]``, e.g.
+    ``local:2b:mlx``) and ``cascade`` (``cascade:<path to cascade.json>``)."""
+    from .models import BACKENDS
+    if target.startswith(("http://", "https://")):
+        return "http", {"base_url": target}
+    if target == "fake":
+        return "fake", {"fake": True}
+    for prefix, kind, key in (("hf:", "hf", "repo"), ("cascade:", "cascade", "cascade")):
+        if target.startswith(prefix):
+            if not target[len(prefix):]:
+                raise ValueError(f"engine target {target!r}: nothing after {prefix!r}")
+            return kind, {key: target[len(prefix):]}
+    if target.split(":", 1)[0] == "local":
+        kw: dict = {}
+        for part in target.split(":")[1:]:
+            if part in BACKENDS:
+                kw["backend"] = part
+            elif part:
+                kw["release"] = part
+            else:
+                raise ValueError(f"engine target {target!r}: empty part")
+        return "local", kw
+    raise ValueError(f"unknown engine target {target!r} (expected {TARGETS})")
+
+
+def from_target(target: str, *, backend: str = "auto", api_key: str | None = None, timeout: float | None = None,
+                **load_kw: Any) -> JevStyle:
+    """A client for an engine target (see ``parse_target``); used by ``jev-style eval --server`` and the cascade
+    tiers. ``backend`` is the default for in-process targets that do not name one; ``api_key`` / ``timeout`` apply
+    to http targets, ``load_kw`` (device, dtype, revision, ...) to in-process ones."""
+    kind, kw = parse_target(target)
+    if kind == "http":
+        return JevStyle(base_url=kw["base_url"], api_key=api_key, **({"timeout": timeout} if timeout else {}))
+    if kind == "fake":
+        return JevStyle(fake=True)
+    if kind == "hf":
+        return JevStyle.from_pretrained(kw["repo"], **load_kw)      # the repo picks the backend
+    if kind == "cascade":
+        return JevStyle(cascade=kw["cascade"], backend=backend, **load_kw)
+    return JevStyle(**{"backend": backend, **load_kw, **kw})
 
 
 # -- module-level shortcuts ------------------------------------------------------------------------

@@ -1,0 +1,11 @@
+{
+  "id": "jev-style-glue-2",
+  "description": "EXAMPLE, thresholds are placeholders (not calibrated, not frozen): Jev-Style 2B Decision v3 (in-process) -> JevK5-9B v0.3.3 (jevk5-serve on :8090)",
+  "tiers": [
+    {"name": "2b", "model_id": "jev-style-2b-decision-v3", "target": "local:2b-v3"},
+    {"name": "jevk5-9b", "model_id": "alibiserikbay/JevK5-9B", "target": "http://127.0.0.1:8090",
+     "revision": "v0.3.3", "protocol": "jevk5"}
+  ],
+  "thresholds": [0.5],
+  "confidence": "normalized_pmax"
+}
