@@ -518,7 +518,8 @@ class CascadeAdapter:
 # ----------------------------------------------------------------------------- config
 _TOP_KEYS = {"id", "description", "tiers", "thresholds", "confidence", "frozen_utc", "calibration_sha256", "$schema"}
 _TOP_REQUIRED = ("id", "description", "tiers", "thresholds")
-_TIER_KEYS = {"name", "model_id", "target", "revision", "max_options", "protocol", "api_key_env", "timeout_s"}
+_TIER_KEYS = {"name", "model_id", "target", "revision", "max_options", "protocol", "api_key_env", "timeout_s", "dtype"}
+TIER_DTYPES = ("float32", "bfloat16")
 _TIER_REQUIRED = ("name", "model_id", "target")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -533,6 +534,7 @@ class TierConfig:
     protocol: str = "systemone"         # "jevk5": shape questions for jevk5-serve (see jevk5_questions)
     api_key_env: str | None = None      # http: bearer token read from this environment variable
     timeout_s: float | None = None      # http: request timeout (default 120 s)
+    dtype: str | None = None            # local / hf torch tiers: "float32" | "bfloat16" (overrides --dtype)
 
 
 @dataclass(frozen=True)
@@ -586,7 +588,7 @@ class CascadeConfig:
         tiers = []
         for t in self.tiers:
             row = {"name": t.name, "model_id": t.model_id, "target": t.target}
-            for k in ("revision", "max_options", "api_key_env", "timeout_s"):
+            for k in ("revision", "max_options", "api_key_env", "timeout_s", "dtype"):
                 if getattr(t, k) is not None:
                     row[k] = getattr(t, k)
             if t.protocol != "systemone":
@@ -676,7 +678,13 @@ def _tier(t: Any, i: int) -> TierConfig:
         _string(key_env, f"{where}.api_key_env")
     if timeout is not None and (isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0):
         raise CascadeConfigError(f"{where}.timeout_s must be a positive number, got {timeout!r}")
-    return TierConfig(name, model_id, target, rev, mo, proto, key_env, float(timeout) if timeout else None)
+    dtype = t.get("dtype")
+    if dtype is not None:
+        if kind not in ("local", "hf"):
+            raise CascadeConfigError(f"{where}.dtype only applies to local / hf tiers")
+        if dtype not in TIER_DTYPES:
+            raise CascadeConfigError(f"{where}.dtype must be one of {list(TIER_DTYPES)}, got {dtype!r}")
+    return TierConfig(name, model_id, target, rev, mo, proto, key_env, float(timeout) if timeout else None, dtype)
 
 
 def build_tier(cfg: TierConfig, *, backend: str = "auto", **load_kw: Any) -> Tier:
@@ -696,5 +704,7 @@ def build_tier(cfg: TierConfig, *, backend: str = "auto", **load_kw: Any) -> Tie
         kw.update(load_kw)
         if cfg.revision:
             kw["revision"] = cfg.revision
+        if cfg.dtype:
+            kw["dtype"] = cfg.dtype
     engine = from_target(cfg.target, backend=backend, **kw)
     return Tier(cfg.name, cfg.model_id, engine, cfg.max_options, cfg.protocol, cfg.target, cfg.revision)

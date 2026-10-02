@@ -530,3 +530,17 @@ def test_examples_are_valid():
         c = load_config(f)
         assert c.tiers[-1].protocol == "jevk5" and len(c.thresholds) == len(c.tiers) - 1
         assert not math.isnan(sum(c.thresholds))
+
+
+def test_tier_dtype_is_validated_and_round_trips():
+    base = {"id": "c", "description": "d", "thresholds": [0.5],
+            "tiers": [{"name": "a", "model_id": "a", "target": "fake", "dtype": "bfloat16"},
+                      {"name": "b", "model_id": "b", "target": "http://127.0.0.1:1"}]}
+    cfg = CascadeConfig.from_dict(base)
+    assert cfg.tiers[0].dtype == "bfloat16" and cfg.to_dict()["tiers"][0]["dtype"] == "bfloat16"
+    bad = json.loads(json.dumps(base)); bad["tiers"][0]["dtype"] = "float16"
+    with pytest.raises(CascadeConfigError):
+        CascadeConfig.from_dict(bad)
+    http = json.loads(json.dumps(base)); http["tiers"][1]["dtype"] = "float32"
+    with pytest.raises(CascadeConfigError):
+        CascadeConfig.from_dict(http)
