@@ -66,7 +66,8 @@ available, call them directly for a quick one-off judgement instead of writing c
 - `choice`: `choice` is the argmax; `probabilities` keep the option order and sum to 1;
   `confidence = (k * p_max - 1) / (k - 1)` for k options (0 = uniform, 1 = certain).
 - `score`: `score = sum_i i * p_i` with level 0 = the first level, so it can land between levels;
-  `legend` maps `"0"`, `"1"`, ... to labels and `probabilities` is keyed the same way.
+  `legend` maps `"0"`, `"1"`, ... to labels and `probabilities` is keyed the same way. Its `confidence`
+  is TypeSafe's ordinal formula: probability on a level next to the peak costs less than probability far away.
 
 ## 4. Turn probabilities into actions in code
 
@@ -83,10 +84,11 @@ Pick thresholds from the user's own labelled examples with the `jev-style-eval` 
 ## 5. Limits (do not work around them by trimming silently)
 
 - State + question must fit in **25,600 tokens**; each question with its options in **2,048 tokens**.
-  Too big -> HTTP 422 `input_budget_exceeded`. The server never truncates; if you must shorten input,
+  Too big -> HTTP 400 `max_tokens_exceeded`. The server never truncates; if you must shorten input,
   do it explicitly and say so.
 - `choice`: 1..255 options. `score`: 2..10 levels, lowest first.
-- Other errors: 422 `invalid_request` / `invalid_question` (names the question), 401 without the right key.
+- Other errors: 422 `invalid_request` / `invalid_question` (names the question), 401 without the right key,
+  400 for images / `box` questions (text only).
 - It is a 0.8B model: good at clear-cut judgements, weaker on multi-step arithmetic or facts not in the
   state. Compute amounts, dates and counts in code and put the results into the state.
 

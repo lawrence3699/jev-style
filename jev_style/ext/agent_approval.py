@@ -13,7 +13,7 @@ The check runs the Claude Code guard's own code: ``evaluate`` from
 Hard rules are checked in code, the guard's state and questions go to this server's engine in one
 systemone-shaped call, and the guard's thresholds turn the answers into allow / ask / deny. The page
 therefore shows exactly what the hook would decide. ``source`` is the guard's: ``rule`` or ``model``
-(``error`` when the engine refused the call, e.g. input_budget_exceeded, which the guard turns into "ask";
+(``error`` when the engine refused the call, e.g. max_tokens_exceeded, which the guard turns into "ask";
 ``skip`` for tools the guard never checks).
 
 Nothing is executed: commands are text in, verdict out. The guard's log is not written (only its hook mode

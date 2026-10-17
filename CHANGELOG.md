@@ -3,6 +3,31 @@
 Versions follow [semantic versioning](https://semver.org/). Each release pins the model revisions it loads
 (`jev_style/models.py`), so upgrading the package is what changes the weights you get.
 
+## 0.5.0 (2026-10-17)
+
+Compatibility with TypeSafe's API as of Jev 1.14 and the official SDKs (Python 0.7.5, JavaScript 0.7.0).
+
+- **Compressed request bodies.** The official SDKs now compress bodies of 1 KiB or more with zstd by default, which
+  older servers rejected with 422 `invalid_json`. `POST /v1/systemone` accepts one layer of
+  `Content-Encoding: gzip`, `x-gzip` or `zstd` (window up to 8 MiB). Checked end to end with `typesafe-sdk` 0.7.5
+  and its default compression. New core dependency: `zstandard`.
+- **Request rules as in TypeSafe's API.** Body over 32 MiB (compressed or decompressed): 413 `payload_too_large`.
+  Unsupported or multi-layer `Content-Encoding`: 415 `unsupported_content_encoding`. 400 for a malformed compressed
+  body (`invalid_compressed_body`), a byte order mark or invalid UTF-8 (`invalid_encoding`), more than 64 nested
+  levels in `state`, `instructions` or `criteria` (`nesting_too_deep`; very deep bodies used to fail with 500), and
+  NaN, Infinity or numbers too large to represent (`non_finite_number`). Validation errors stay 422.
+- **Over-long inputs: 400 `max_tokens_exceeded`** (was 422 `input_budget_exceeded`), the code TypeSafe returns.
+  The Playground understands both.
+- **Score `confidence` uses TypeSafe's ordinal formula** (docs.typesafe.ai/confidence):
+  `max(0, 1 - sum_i p_i |i - m| / MAD_unif)`, so probability on a neighbouring level costs less than probability
+  far away. It was the Choice formula. Probabilities, `score` and Choice confidence are unchanged; cascade routing
+  still uses normalized p_max, so frozen thresholds keep their meaning.
+- **Text only, said clearly.** `assets` (images), multipart bodies and `box` questions get 400
+  `images_not_supported` / `unsupported_question_type` instead of a validation error.
+- `GET /v1/models` always gives `release_date` as a string (the official SDKs refused `null` from the fake engine
+  and cascades); a cascade reports the date its routing was frozen.
+- Official model names (`jev-latest`, `jev-preview`, `jev-1.14.0`, ...) keep working in the `model` field.
+
 ## 0.4.0 (2026-10-03)
 
 - **CUDA graphs for the PyTorch backend, on by default.** On CUDA the torch runtime records CUDA graphs at start-up

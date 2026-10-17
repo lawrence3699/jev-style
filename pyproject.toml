@@ -27,6 +27,7 @@ dependencies = [
   "numpy>=1.26",
   "tokenizers>=0.21",
   "mcp>=2.0",
+  "zstandard>=0.23",
 ]
 
 [project.optional-dependencies]

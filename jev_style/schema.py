@@ -2,10 +2,17 @@
 
 Hand-written (no pydantic) so every problem maps to the one error body the contract promises::
 
-    HTTP 422  {"error": {"code": ..., "message": ..., "question": <id, when one question is at fault>}}
+    HTTP 4xx  {"error": {"code": ..., "message": ..., "question": <id, when one question is at fault>}}
 
-Codes: ``invalid_json`` (body is not JSON), ``invalid_request`` (top level), ``invalid_question``
-(one question; ``question`` names it). Budget errors (``input_budget_exceeded``) are raised later by
+Validation errors are 422: ``invalid_json`` (body is not JSON), ``invalid_request`` (top level),
+``invalid_question`` (one question; ``question`` names it). Breaking one of systemone's request rules
+is 400, as in TypeSafe's API: ``invalid_encoding`` (not UTF-8, or a byte order mark),
+``nesting_too_deep`` (over 64 levels in ``state`` / ``instructions`` / ``criteria``),
+``non_finite_number`` (NaN, Infinity, 1e400), ``invalid_compressed_body``. A body over 32 MiB
+(compressed or not) is 413 ``payload_too_large``; a ``Content-Encoding`` other than one layer of
+gzip / x-gzip / zstd is 415 ``unsupported_content_encoding``. This model reads text only, so
+``assets`` (images) and ``box`` questions are 400 ``images_not_supported`` /
+``unsupported_question_type``. Over-long inputs (400 ``max_tokens_exceeded``) are raised later by
 the engine adapter, because they need the tokenizer.
 
 Accepted request::
@@ -33,12 +40,20 @@ is the project's canonical serialisation (strings verbatim, structures as JSON).
 from __future__ import annotations
 
 import json
+import math
+import zlib
 from dataclasses import dataclass, field
 from typing import Any
+
+import zstandard
 
 QTYPES = ("noul", "choice", "score")
 MAX_CHOICE_OPTIONS = 255
 MIN_SCORE_LEVELS, MAX_SCORE_LEVELS = 2, 10
+MAX_BODY_BYTES = 32 * 1024 * 1024        # compressed and decompressed alike
+MAX_NESTING = 64                         # per state / instructions / criteria
+ZSTD_MAX_WINDOW = 8 * 1024 * 1024
+_ZSTD_STEP = 256                         # input bytes per decompress call: bounds output per call (~11 MiB worst case)
 
 
 class ApiError(Exception):
@@ -83,6 +98,27 @@ def compact_json(value: Any) -> str:
 
 def _is_structured(v: Any) -> bool:
     return isinstance(v, (dict, list))
+
+
+def nesting(v: Any) -> int:
+    """Levels of objects / arrays in ``v`` (a scalar is 0, ``{}`` is 1, ``{"a": []}`` is 2)."""
+    deepest, stack = 0, [(v, 1)]
+    while stack:
+        x, d = stack.pop()
+        if isinstance(x, dict):
+            x = x.values()
+        elif not isinstance(x, list):
+            continue
+        deepest = max(deepest, d)
+        stack.extend((y, d + 1) for y in x if isinstance(y, (dict, list)))
+    return deepest
+
+
+def _check_nesting(v: Any, where: str, qid: str | None = None) -> None:
+    d = nesting(v)
+    if d > MAX_NESTING:
+        raise ApiError(400, "nesting_too_deep", f"{where} nests {d} levels of objects/arrays; the limit is "
+                       f"{MAX_NESTING} (flatten deeper content)", qid)
 
 
 def _instructions(v: Any, qid: str) -> str:
@@ -130,7 +166,12 @@ def _level_text(level: Any) -> Any:
 def parse_question(qid: str, q: Any) -> QuestionSpec:
     if not isinstance(q, dict):
         raise _bad("question must be an object", qid)
+    for key in ("instructions", "criteria"):
+        _check_nesting(q.get(key), key, qid)
     t = q.get("type")
+    if t == "box":
+        raise ApiError(400, "unsupported_question_type",
+                       "box questions need an image model; this model reads text only", qid)
     if t not in QTYPES:
         raise _bad(f"type must be one of {', '.join(QTYPES)} (got {t!r})", qid)
     if "instructions" not in q:
@@ -185,11 +226,15 @@ def parse_request(body: Any) -> ParsedRequest:
     model = body.get("model")
     if model is not None and not isinstance(model, str):
         raise _bad("model must be a string")
+    if body.get("assets") is not None:
+        raise ApiError(400, "images_not_supported", "this model reads text only; requests with assets (images) "
+                       "are not supported")
     if "state" not in body:
         raise _bad("state is required")
     state = body["state"]
     if not (isinstance(state, str) or _is_structured(state)):
         raise _bad("state must be a string, object or array")
+    _check_nesting(state, "state")
     qs = body.get("questions")
     if not isinstance(qs, dict):
         raise _bad("questions must be an object mapping id -> question")
@@ -203,8 +248,113 @@ def parse_request(body: Any) -> ParsedRequest:
     return ParsedRequest(model=model, state=state, questions=specs)
 
 
-def parse_json(raw: bytes) -> Any:
+class _NonFinite(ValueError):
+    pass
+
+
+def _finite_float(s: str) -> float:
+    x = float(s)
+    if not math.isfinite(x):
+        raise _NonFinite(f"{s} is too large to represent")
+    return x
+
+
+def _finite_int(s: str) -> int:
+    x = int(s)
     try:
-        return json.loads(raw)
-    except (ValueError, UnicodeDecodeError) as e:
+        float(x)
+    except OverflowError:
+        raise _NonFinite(f"{s[:20]}... is too large to represent") from None
+    return x
+
+
+def _no_constant(s: str) -> Any:
+    raise _NonFinite(f"{s} is not a finite number")
+
+
+def parse_json(raw: bytes) -> Any:
+    """The JSON body, enforcing systemone's request rules (UTF-8 without BOM, finite numbers)."""
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raise ApiError(400, "invalid_encoding", "request body must be UTF-8 JSON without a byte order mark")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as e:
+        raise ApiError(400, "invalid_encoding", f"request body is not valid UTF-8: {e}") from None
+    try:
+        return json.loads(text, parse_float=_finite_float, parse_int=_finite_int, parse_constant=_no_constant)
+    except _NonFinite as e:
+        raise ApiError(400, "non_finite_number", f"finite numbers only (send exact large quantities as strings): "
+                       f"{e}") from None
+    except RecursionError:
+        raise ApiError(400, "nesting_too_deep", f"request body nests far more than {MAX_NESTING} levels") from None
+    except ValueError as e:
         raise ApiError(422, "invalid_json", f"request body is not valid JSON: {e}") from None
+
+
+def _too_large() -> ApiError:
+    return ApiError(413, "payload_too_large", f"request body is over {MAX_BODY_BYTES // 2**20} MiB "
+                    "(compressed or decompressed)")
+
+
+def _malformed(enc: str, why: Any) -> ApiError:
+    return ApiError(400, "invalid_compressed_body", f"malformed {enc} body: {why}")
+
+
+def _gunzip(raw: bytes) -> bytes:
+    out, data = bytearray(), raw
+    try:
+        while True:                                     # one gzip member per round (members may be concatenated)
+            d = zlib.decompressobj(16 + zlib.MAX_WBITS)
+            out += d.decompress(data, MAX_BODY_BYTES + 1 - len(out))
+            if len(out) > MAX_BODY_BYTES or d.unconsumed_tail:
+                raise _too_large()
+            if not d.eof:
+                raise _malformed("gzip", "truncated")
+            data = d.unused_data
+            if not data:
+                return bytes(out)
+    except zlib.error as e:
+        raise _malformed("gzip", e) from None
+
+
+def _unzstd(raw: bytes) -> bytes:
+    dctx = zstandard.ZstdDecompressor(max_window_size=ZSTD_MAX_WINDOW)
+    out, pos, carry = bytearray(), 0, b""
+    obj, fed = dctx.decompressobj(), False
+    try:
+        while carry or pos < len(raw):                  # small input steps keep each call's output bounded
+            if carry:
+                piece, carry = carry, b""
+            else:
+                piece, pos = raw[pos:pos + _ZSTD_STEP], pos + _ZSTD_STEP
+            out += obj.decompress(piece)
+            fed = True
+            if len(out) > MAX_BODY_BYTES:
+                raise _too_large()
+            if obj.eof:                                 # frame done; the rest (if any) is the next frame
+                carry, obj, fed = obj.unused_data, dctx.decompressobj(), False
+    except zstandard.ZstdError as e:
+        raise _malformed("zstd", e) from None
+    if fed or not raw:
+        raise _malformed("zstd", "truncated" if raw else "empty body")
+    return bytes(out)
+
+
+def decode_body(raw: bytes, content_encoding: str | None) -> bytes:
+    """The request body with its ``Content-Encoding`` (one layer of gzip / x-gzip / zstd) removed."""
+    if len(raw) > MAX_BODY_BYTES:
+        raise _too_large()
+    layers = [e.strip().lower() for e in (content_encoding or "").split(",") if e.strip()]
+    layers = [e for e in layers if e != "identity"]
+    if not layers:
+        return raw
+    if len(layers) > 1:
+        raise ApiError(415, "unsupported_content_encoding",
+                       f"use one compression layer (got Content-Encoding: {content_encoding})")
+    enc = layers[0]
+    if enc in ("gzip", "x-gzip"):
+        return _gunzip(raw)
+    if enc == "zstd":
+        return _unzstd(raw)
+    raise ApiError(415, "unsupported_content_encoding",
+                   f"Content-Encoding {enc!r} is not supported (use gzip, x-gzip or zstd)")
