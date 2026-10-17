@@ -321,7 +321,7 @@ def summarise_arguments_ex(tool_input: Dict[str, Any], cfg: Dict[str, Any], tool
     """Return (arguments as the model will see them, list of shortened field paths).
 
     By default (``max_field_chars`` 0) nothing is shortened: the whole call goes to the server,
-    and a call too big for the 25,600-token context comes back as ``input_budget_exceeded``,
+    and a call too big for the 25,600-token context comes back as ``max_tokens_exceeded``,
     which the guard turns into "ask". If ``max_field_chars`` is set, longer strings are shortened
     with a visible marker and ``evaluate`` raises the verdict to at least "ask", because the model
     did not see the whole call. Top-level fields from ``drop_fields`` are removed (Bash's

@@ -14,7 +14,7 @@
   "log_path": "~/.local/state/jev-style-guard/guard.jsonl",
   "log_preview_chars": 300,
   "max_field_chars": 0,
-  "_max_field_chars": "0 (default) = never shorten: the whole call is sent, and a call too big for the model's 25,600-token context comes back as input_budget_exceeded, which becomes 'ask'. A positive value shortens longer strings with a visible marker, and any shortened call is raised to at least 'ask' because the model did not see all of it.",
+  "_max_field_chars": "0 (default) = never shorten: the whole call is sent, and a call too big for the model's 25,600-token context comes back as max_tokens_exceeded, which becomes 'ask'. A positive value shortens longer strings with a visible marker, and any shortened call is raised to at least 'ask' because the model did not see all of it.",
   "drop_fields": {
     "Bash": [
       "description"

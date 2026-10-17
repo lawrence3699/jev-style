@@ -40,7 +40,11 @@ Source and full docs: https://github.com/lawrence3699/jev-style
 |---|---|---|
 | 422 | `invalid_json`, `invalid_request` | body or top-level fields wrong |
 | 422 | `invalid_question` | one question is malformed; `question` names it |
-| 422 | `input_budget_exceeded` | a question with its options is over 2,048 tokens, or state + question is over 25,600; `message` says which (nothing is truncated) |
+| 400 | `max_tokens_exceeded` | a question with its options is over 2,048 tokens, or state + question is over 25,600; `message` says which (nothing is truncated). Servers before 0.5.0 answered 422 `input_budget_exceeded` |
+| 400 | `invalid_encoding`, `nesting_too_deep`, `non_finite_number`, `invalid_compressed_body` | a request rule is broken: not UTF-8 or a byte order mark, over 64 nested levels in `state` / `instructions` / `criteria`, NaN / Infinity / 1e400, a malformed compressed body |
+| 400 | `images_not_supported`, `unsupported_question_type` | `assets` (images), multipart bodies or `box` questions: the model reads text only |
+| 413 | `payload_too_large` | body over 32 MiB, compressed or decompressed |
+| 415 | `unsupported_content_encoding` | a `Content-Encoding` other than one layer of `gzip`, `x-gzip` or `zstd` |
 | 401 | `unauthorized` | server has a key and the bearer is missing or wrong |
 | 404 / 500 | `not_found` / `internal_error` | unknown route / server-side failure |
 

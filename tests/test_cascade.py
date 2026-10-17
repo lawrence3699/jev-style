@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from jev_style import JevStyle, JevStyleError, choice, noul, score
 from jev_style.cascade import (CascadeAdapter, CascadeConfig, CascadeConfigError, Routed, Tier, TierError,
                                jevk5_questions, keep, load_config, normalize, select)
+from jev_style.adapter import score_confidence
 from jev_style.client import parse_target
 from jev_style.schema import ApiError
 from jev_style.server import create_app
@@ -154,7 +155,8 @@ def test_one_request_per_tier_with_only_the_uncertain_questions():
     assert a["n"]["noul"] == 0.95 and "confidence" not in a["n"]
     assert a["c"]["confidence"] == pytest.approx((3 * 0.85 - 1) / 2)              # ours, not the tier's 0.0
     assert a["s"]["legend"] == {"0": "Calm", "1": "Frustrated", "2": "Very angry"}
-    assert a["s"]["score"] == pytest.approx(0.1 + 2 * 0.8) and a["s"]["confidence"] == pytest.approx(0.7)
+    # score answers carry the ordinal Score confidence: 1 - (0.1 * 2 + 0.1 * 1) / (2 / 3)
+    assert a["s"]["score"] == pytest.approx(0.1 + 2 * 0.8) and a["s"]["confidence"] == pytest.approx(0.55)
     assert out["model"] == "test-cascade" and out["backend"] == "cascade"
     assert out["usage"] == {"input_tokens": 40, "state_tokens": 0, "output_tokens": 0}
     tiers = out["timing"]["tiers"]
@@ -299,7 +301,8 @@ def test_offline_select_matches_the_live_adapter():
         if q["type"] == "noul":
             assert live[qid]["noul"] == n.probabilities["true"]
         else:
-            assert live[qid]["probabilities"] == n.probabilities and live[qid]["confidence"] == n.confidence
+            expected = n.confidence if q["type"] == "choice" else score_confidence(list(n.probabilities.values()))
+            assert live[qid]["probabilities"] == n.probabilities and live[qid]["confidence"] == expected
         routed_tiers.add(r.tier)
     assert routed_tiers == {0, 1, 2}                 # the sample exercises every tier
 
@@ -347,7 +350,7 @@ def test_response_schema_is_a_superset_of_the_single_model_one():
 def test_budget_error_through_the_cascade_is_the_adapter_error():
     c = TestClient(create_app(CascadeAdapter.from_config(_fake_config())))
     r = c.post("/v1/systemone", json={"state": "word " * 30_000, "questions": {"x": noul("long?")}})
-    assert r.status_code == 422 and r.json()["error"]["code"] == "input_budget_exceeded"
+    assert r.status_code == 400 and r.json()["error"]["code"] == "max_tokens_exceeded"
     assert r.json()["error"]["tier"] == 1
 
 

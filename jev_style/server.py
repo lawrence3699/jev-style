@@ -26,10 +26,23 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__, discovery
 from .adapter import Adapter
-from .schema import ApiError, parse_json
+from .schema import MAX_BODY_BYTES, ApiError, decode_body, parse_json
 
 log = logging.getLogger("jev_style.serve")
 DEMO_DATA_DIR = discovery.WEB_DIR / "demo-data"
+
+
+async def _read_body(request: Request) -> bytes:
+    """The raw body, refused with 413 as soon as it passes ``MAX_BODY_BYTES`` (before decompression)."""
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > MAX_BODY_BYTES:
+        raise ApiError(413, "payload_too_large", f"request body is over {MAX_BODY_BYTES // 2**20} MiB")
+    buf = bytearray()
+    async for chunk in request.stream():
+        buf += chunk
+        if len(buf) > MAX_BODY_BYTES:
+            raise ApiError(413, "payload_too_large", f"request body is over {MAX_BODY_BYTES // 2**20} MiB")
+    return bytes(buf)
 
 
 class _Static(StaticFiles):
@@ -86,7 +99,11 @@ def create_app(adapter: Adapter | Any, *, api_key: str | None = None, web_dir: P
 
     @app.post("/v1/systemone", dependencies=[Depends(require_auth)])
     async def systemone(request: Request):
-        body = parse_json(await request.body())
+        if request.headers.get("content-type", "").lower().startswith("multipart/"):
+            raise ApiError(400, "images_not_supported", "this model reads text only; multipart requests (images) "
+                           "are not supported")
+        raw = await _read_body(request)
+        body = parse_json(await run_in_threadpool(decode_body, raw, request.headers.get("content-encoding")))
         return JSONResponse(await run_in_threadpool(app.state.adapter.systemone, body))
 
     @app.get("/v1/models", dependencies=[Depends(require_auth)])

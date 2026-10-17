@@ -8,8 +8,11 @@ state is read once. Answer arithmetic (over the runtime's calibrated probabiliti
 * score:  ``score`` = sum_i i * p_i over level indices 0..K-1, ``legend`` = {"0": label, ...},
           ``probabilities`` = {"0": p_0, ...}, ``confidence``
 
-confidence = (k * p_max - 1) / (k - 1) for k options, clipped to [0, 1] (0 = uniform, 1 = all mass on
-one option). Over-budget inputs are rejected with 422 ``input_budget_exceeded``; nothing is truncated.
+Choice confidence = (k * p_max - 1) / (k - 1) for k options, clipped to [0, 1] (0 = uniform, 1 = all mass on
+one option). Score confidence is TypeSafe's ordinal formula, which also counts how far probability sits from
+the most likely level m: max(0, 1 - sum_i p_i |i - m| / MAD_unif), MAD_unif = (1/n) sum_i |i - (n - 1) / 2|.
+Noul answers carry no confidence. Over-long inputs are rejected with 400 ``max_tokens_exceeded``, as in
+TypeSafe's API; nothing is truncated.
 """
 from __future__ import annotations
 
@@ -30,6 +33,17 @@ def confidence(probs: list[float]) -> float:
     if k <= 1:
         return 1.0
     return float(min(1.0, max(0.0, (k * max(probs) - 1.0) / (k - 1.0))))
+
+
+def score_confidence(probs: list[float]) -> float:
+    """TypeSafe's ordinal Score confidence (docs.typesafe.ai/confidence); m = the first most likely level."""
+    n = len(probs)
+    if n <= 1:
+        return 1.0
+    m = max(range(n), key=probs.__getitem__)
+    spread = sum(p * abs(i - m) for i, p in enumerate(probs))
+    even_spread = sum(abs(i - (n - 1) / 2) for i in range(n)) / n
+    return float(min(1.0, max(0.0, 1.0 - spread / even_spread)))
 
 
 def renormalise(probs: list[float]) -> list[float]:
@@ -85,7 +99,7 @@ class Adapter:
                 results = self.worker.submit(self.runtime.decide_many, parsed.state,
                                              [q.internal for q in parsed.questions], category=self.category).result()
             except budget as e:
-                raise ApiError(422, "input_budget_exceeded", f"{e} (nothing truncated)") from None
+                raise ApiError(400, "max_tokens_exceeded", f"{e} (nothing truncated)") from None
             except qerr as e:
                 raise ApiError(422, "invalid_question", str(e)) from None
         total_ms = (time.perf_counter() - t0) * 1000
@@ -107,15 +121,16 @@ class Adapter:
         if q.type == "choice":
             return {"type": "choice", "choice": names[i], "confidence": confidence(p),
                     "probabilities": dict(zip(names, p))}
-        return {"type": "score", "score": float(sum(k * v for k, v in enumerate(p))), "confidence": confidence(p),
-                "legend": dict(q.legend), "probabilities": dict(zip(names, p))}
+        return {"type": "score", "score": float(sum(k * v for k, v in enumerate(p))),
+                "confidence": score_confidence(p), "legend": dict(q.legend), "probabilities": dict(zip(names, p))}
 
     def models(self) -> dict:
         entry = {"id": self.model_id, "context_tokens": self.max_len, "head_max_tokens": self.head_max,
                  "backend": self.backend}
         return {"object": "list", "data": [entry],
-                # the shape the public systemone SDKs read from GET /v1/models
-                "models": [{"name": self.model_id, "release_date": self.release_date,
+                # the shape the public systemone SDKs read from GET /v1/models; they require release_date to be a
+                # string ("" for the fake engine / unpinned builds)
+                "models": [{"name": self.model_id, "release_date": self.release_date or "",
                             "description": self.description}]}
 
     def release_info(self) -> dict:

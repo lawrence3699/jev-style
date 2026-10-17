@@ -15,6 +15,8 @@ replay of recorded per-question answers route the same way):
 * Confidence is computed here from the tier's probabilities, never read from its ``confidence`` field:
   choice / score with k options ``(k * p_max - 1) / (k - 1)``; noul ``|2 * P(true) - 1|`` (the same at k = 2).
   Probabilities are renormalised once (as ``Adapter`` does); a malformed answer counts as a tier error.
+  This routing confidence is fixed by the frozen thresholds; the ``confidence`` field of a returned score answer
+  uses the ordinal Score formula, as ``Adapter`` does.
 * One threshold per non-top tier, shared by every question type: tier i keeps an answer iff
   confidence >= thresholds[i]; otherwise the question escalates.
 * A tier error for a question (input budget, invalid or unsupported question, the HTTP error of the request it
@@ -60,7 +62,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Mapping, NamedTuple, Sequence
 
-from .adapter import confidence, renormalise
+from .adapter import confidence, renormalise, score_confidence
 from .schema import (ApiError, ParsedRequest, QuestionSpec, _level_text, compact_json, parse_question,
                      parse_request)
 
@@ -280,7 +282,7 @@ def canonical(q: QuestionSpec, norm: Normalized) -> dict:
     if q.type == "choice":
         return {"type": "choice", "choice": norm.label, "confidence": norm.confidence, "probabilities": probs}
     return {"type": "score", "score": float(sum(i * v for i, v in enumerate(probs.values()))),
-            "confidence": norm.confidence, "legend": dict(q.legend), "probabilities": probs}
+            "confidence": score_confidence(list(probs.values())), "legend": dict(q.legend), "probabilities": probs}
 
 
 def check_answer(q: QuestionSpec, answer: Any) -> Any:
@@ -391,7 +393,8 @@ class CascadeAdapter:
         self.model_id = cascade_id
         self.description = description or f"Cascade {' -> '.join(t.model_id for t in self.tiers)}"
         self.config = config
-        self.release_date = None
+        frozen = getattr(config, "frozen_utc", None)
+        self.release_date = frozen[:10] if isinstance(frozen, str) else None    # the date the routing was frozen
 
     @classmethod
     def from_config(cls, config: "CascadeConfig | Mapping[str, Any] | str | Path", *, backend: str = "auto",
@@ -500,7 +503,8 @@ class CascadeAdapter:
         entry = {"id": self.model_id, "context_tokens": self.max_len, "head_max_tokens": self.head_max,
                  "backend": self.backend, "tiers": self.tier_info(), **self._frozen()}
         return {"object": "list", "data": [entry],
-                "models": [{"name": self.model_id, "release_date": self.release_date,
+                # the official SDKs require release_date to be a string
+                "models": [{"name": self.model_id, "release_date": self.release_date or "",
                             "description": self.description}]}
 
     def release_info(self) -> dict:

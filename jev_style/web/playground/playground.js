@@ -312,7 +312,7 @@
       errBox.hidden = false; errBox.innerHTML = "";
       errBox.appendChild(el("div", { "class": "pg-errcode mono" }, (S.lastStatus || "") + " " + err.code + (err.question ? " · " + err.question : "")));
       errBox.appendChild(el("div", {}, err.message));
-      if (err.code === "input_budget_exceeded") {
+      if (err.code === "max_tokens_exceeded" || err.code === "input_budget_exceeded") {
         var lim = Number(err.limit || 0).toLocaleString(), tok = Number(err.tokens || 0).toLocaleString();
         errBox.appendChild(el("div", { "class": "mj-small mj-muted" })).appendChild(err.kind === "head"
           ? bi("Question + options use " + tok + " tokens; the limit is " + lim + ". Nothing is truncated.",

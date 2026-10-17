@@ -73,7 +73,7 @@ def test_invalid_json(client):
 def test_budget_never_truncates(client):
     r = client.post("/v1/systemone", json={"state": "word " * 30_000,
                                            "questions": {"x": {"type": "noul", "instructions": "long?"}}})
-    assert r.status_code == 422 and r.json()["error"]["code"] == "input_budget_exceeded"
+    assert r.status_code == 400 and r.json()["error"]["code"] == "max_tokens_exceeded"
 
 
 def test_models(client):
