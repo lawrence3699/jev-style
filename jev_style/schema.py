@@ -90,6 +90,7 @@ class ParsedRequest:
     model: str | None
     state: Any
     questions: list[QuestionSpec]
+    images: list[bytes] = field(default_factory=list)   # image models: in <|image_k|> order (see assets.py)
 
 
 def compact_json(value: Any) -> str:
@@ -171,7 +172,7 @@ def parse_question(qid: str, q: Any) -> QuestionSpec:
     t = q.get("type")
     if t == "box":
         raise ApiError(400, "unsupported_question_type",
-                       "box questions need an image model; this model reads text only", qid)
+                       "box questions are not supported by the Jev-Style models (no box readout)", qid)
     if t not in QTYPES:
         raise _bad(f"type must be one of {', '.join(QTYPES)} (got {t!r})", qid)
     if "instructions" not in q:
@@ -220,13 +221,17 @@ def parse_question(qid: str, q: Any) -> QuestionSpec:
     return QuestionSpec(qid, t, {"t": "score", "ins": ins, "crit": [_level_text(x) for x in crit]}, names, legend)
 
 
-def parse_request(body: Any) -> ParsedRequest:
+def parse_request(body: Any, *, images_ok: bool = False, parts: dict | None = None,
+                  image_header: bool = False) -> ParsedRequest:
+    """``images_ok``: the model reads images, so ``assets`` (and multipart ``parts``) are resolved by ``assets.resolve``
+    into ``<|image_k|>`` placeholders in the state plus ``ParsedRequest.images``; otherwise they are 400
+    ``images_not_supported``. ``image_header``: the request carried ``TypeSafe-Danger-Zone-Images: true``."""
     if not isinstance(body, dict):
         raise _bad("request body must be a JSON object")
     model = body.get("model")
     if model is not None and not isinstance(model, str):
         raise _bad("model must be a string")
-    if body.get("assets") is not None:
+    if (body.get("assets") is not None or parts) and not images_ok:
         raise ApiError(400, "images_not_supported", "this model reads text only; requests with assets (images) "
                        "are not supported")
     if "state" not in body:
@@ -235,6 +240,12 @@ def parse_request(body: Any) -> ParsedRequest:
     if not (isinstance(state, str) or _is_structured(state)):
         raise _bad("state must be a string, object or array")
     _check_nesting(state, "state")
+    images: list[bytes] = []
+    if body.get("assets") is not None:
+        from .assets import resolve
+        state, images = resolve(body, parts, image_header)
+    elif parts:
+        raise ApiError(400, "invalid_multipart", "multipart image parts need an assets entry that references them")
     qs = body.get("questions")
     if not isinstance(qs, dict):
         raise _bad("questions must be an object mapping id -> question")
@@ -245,7 +256,7 @@ def parse_request(body: Any) -> ParsedRequest:
         if not qid:
             raise _bad("question ids must be non-empty strings")
         specs.append(parse_question(qid, q))
-    return ParsedRequest(model=model, state=state, questions=specs)
+    return ParsedRequest(model=model, state=state, questions=specs, images=images)
 
 
 class _NonFinite(ValueError):

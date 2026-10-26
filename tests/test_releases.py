@@ -9,7 +9,9 @@ from jev_style.models import ALIASES, DEFAULT_RELEASE, RELEASES, build_for_repo,
 def test_published_releases_are_pinned_and_named_consistently():
     assert RELEASES[DEFAULT_RELEASE].published
     for key, r in RELEASES.items():
-        assert r.model_id == r.name.lower() and set(r.builds) == {"torch", "mlx", "gguf"}
+        assert r.model_id == r.name.lower() and "torch" in r.builds and set(r.builds) <= {"torch", "mlx", "gguf"}
+        if key != "2b-v4":                          # 2b-v4: torch only for now
+            assert set(r.builds) == {"torch", "mlx", "gguf"}
         suffix = {"torch": "", "mlx": "-MLX", "gguf": "-GGUF"}
         for backend, b in r.builds.items():
             assert (b.backend, b.release, b.repo) == (backend, key, "chaoliangUNSW/" + r.name + suffix[backend])
@@ -225,3 +227,15 @@ def test_cuda_graphs_on_an_old_runtime(monkeypatch, tmp_path):
     assert "cuda_graphs" not in runtime.kw                           # auto: an old runtime loads as before
     with pytest.raises(ValueError, match="no CUDA-graph path"):
         models.load_release("torch", release="2b", model_dir=tmp_path, device="cuda", cuda_graphs=True)
+
+
+def test_2b_v4_is_a_torch_only_release_with_its_reference_code():
+    r = RELEASES["2b-v4"]
+    assert set(r.builds) == {"torch"} and r.builds["torch"].repo == "chaoliangUNSW/Jev-Style-2B-Decision-v4"
+    pats = models.patterns_for(r.builds["torch"])
+    for f in ("jev_style_decision.py", "macjev_readout.json", "preprocessor_config.json", "src/macjev/*",
+              "*.safetensors", "model.safetensors.index.json"):
+        assert f in pats
+    with pytest.raises(ValueError, match="no mlx build"):
+        models.resolve_backend("mlx", "2b-v4")
+    assert models.resolve_backend("auto", "2b-v4") == "torch"

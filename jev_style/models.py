@@ -5,10 +5,11 @@ input rendering, verdict readout, calibration temperatures and token budgets all
 module only picks a build, downloads a pinned revision and imports that runtime, so the server gives
 exactly the answers the model card documents.
 
-Releases (``--release`` / ``JevStyle(release=...)``; default ``0.8b-v3``), each with three builds:
+Releases (``--release`` / ``JevStyle(release=...)``; default ``0.8b-v3``):
 
 * ``0.8b-v3``  chaoliangUNSW/Jev-Style-0.8B-Decision-v3[-MLX|-GGUF]
 * ``2b-v3``    chaoliangUNSW/Jev-Style-2B-Decision-v3[-MLX|-GGUF]
+* ``2b-v4``    chaoliangUNSW/Jev-Style-2B-Decision-v4 (torch only; text and images)
 
 Backends:
 
@@ -68,24 +69,32 @@ _TORCH_FILES = ("jev_style_decision.py", "config.json", "generation_config.json"
                 "tokenizer.json", "tokenizer_config.json")
 
 
+# 2B v4 (multimodal Qwen3.5 export): the runtime calls the reference scorer it ships under src/macjev/ and reads the
+# image processor configs and macjev_readout.json next to the weights.
+_TORCH_FILES_V4 = _TORCH_FILES + ("preprocessor_config.json", "video_preprocessor_config.json", "macjev_readout.json",
+                                  "SHA256SUMS.json", "src/macjev/*")
+
+
 def _release(key: str, name: str, title: str, model_id: str, release_date: str | None,
-             revisions: dict[str, str | None], torch_weights: tuple[str, ...], mlx_prefix_sharing: bool,
+             revisions: dict[str, str | None], torch_weights: tuple[str, ...], mlx_prefix_sharing: bool = False,
              mlx_extra: tuple[str, ...] = (), mlx_lm: str | None = None, scorer_src: str = "jev_score.cpp",
-             scorer_bin: str = "jev-score", scorer_env: str = "JEV_SCORE_BIN") -> Release:
+             scorer_bin: str = "jev-score", scorer_env: str = "JEV_SCORE_BIN",
+             backends: tuple[str, ...] = ("torch", "mlx", "gguf"),
+             torch_files: tuple[str, ...] = _TORCH_FILES) -> Release:
     repo = "chaoliangUNSW/" + name
     builds = {
         "torch": Build("torch", repo, revisions["torch"], "jev_style_decision", "JevStyleDecision",
-                       _COMMON + _TORCH_FILES + torch_weights, release=key),
-        "mlx": Build("mlx", repo + "-MLX", revisions["mlx"], "jev_style_decision_mlx", "JevStyleDecisionMLX",
+                       _COMMON + torch_files + torch_weights, release=key),
+        "mlx": Build("mlx", repo + "-MLX", revisions.get("mlx"), "jev_style_decision_mlx", "JevStyleDecisionMLX",
                      _COMMON + ("jev_style_decision_mlx.py",) + mlx_extra,
                      {"precision_patterns": "{precision}/*", "prefix_sharing": mlx_prefix_sharing,
                       "mlx_lm": mlx_lm}, release=key),
-        "gguf": Build("gguf", repo + "-GGUF", revisions["gguf"], "jev_style_decision_gguf", "JevStyleDecisionGGUF",
+        "gguf": Build("gguf", repo + "-GGUF", revisions.get("gguf"), "jev_style_decision_gguf", "JevStyleDecisionGGUF",
                       _COMMON + ("jev_style_decision_gguf.py", scorer_src, "build_jev_score.sh", "tokenizer/*"),
                       {"quant_file": name + "-{quant}.gguf", "scorer_bin": scorer_bin, "scorer_env": scorer_env},
                       release=key),
     }
-    return Release(key, model_id, name, title, release_date, builds)
+    return Release(key, model_id, name, title, release_date, {b: builds[b] for b in backends})
 
 
 # The torch builds pin the main repos' CUDA-graph runtimes (0.4.0; JevStyleDecision takes cuda_graphs=). The 0.8B
@@ -108,6 +117,12 @@ RELEASES: dict[str, Release] = {
         ("*.safetensors", "model.safetensors.index.json"), mlx_prefix_sharing=False,
         mlx_extra=("config.json", "THIRD_PARTY_NOTICES.md"), mlx_lm="0.31.3",
         scorer_src="jev_score_v2.cpp", scorer_bin="jev-score-v2", scorer_env="JEV_SCORE_V2_BIN"),
+    # 2B v4: text and images (Jev 1.14 ``assets``), one PyTorch build for now (MLX / GGUF later). Its runtime runs the
+    # reference scorer the model was evaluated with; it has no CUDA-graph path. Not pinned until it is published.
+    "2b-v4": _release(
+        "2b-v4", "Jev-Style-2B-Decision-v4", "Jev-Style 2B Decision v4", "jev-style-2b-decision-v4", None,
+        {"torch": None}, ("*.safetensors", "model.safetensors.index.json"), backends=("torch",),
+        torch_files=_TORCH_FILES_V4),
 }
 ALIASES = {"0.8b": "0.8b-v3", "2b": "2b-v3"}
 DEFAULT_RELEASE = "0.8b-v3"
