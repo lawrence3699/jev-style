@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-torch = ["torch>=2.4", "transformers>=5.0", "pillow>=10"]       # pillow: image requests (2B v4)
+torch = ["torch>=2.4", "transformers>=5.0", "pillow>=10", "torchvision>=0.19"]   # pillow + torchvision: the 2B v4 runtime (images)
 mlx = ["mlx>=0.29; sys_platform == 'darwin'", "mlx-lm==0.31.3; sys_platform == 'darwin'"]
 mcp = []                                  # kept so jev-style[mcp] still resolves; mcp is a core dependency since 0.3.0
 all = ["jev-style[torch,mlx,mcp]"]
