@@ -57,7 +57,7 @@ out = js.decide(ticket_text, {
 out["answers"]["team"]["choice"], out["answers"]["team"]["confidence"]
 ```
 
-Images (only when `GET /v1/models` reports `"images": true`, i.e. the 2B v4 on PyTorch): put
+Images (only when `GET /v1/models` reports `"images": true` in `data[0]`, i.e. the 2B v4 on PyTorch): put
 a reference key in the state and send the image under `assets`, as TypeSafe's API takes it, with the header
 `TypeSafe-Danger-Zone-Images: true`. The Python client does both:
 
