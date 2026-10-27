@@ -136,3 +136,31 @@ def test_models_reports_images_and_text_requests_still_work():
     assert client.get("/v1/models").json()["data"][0]["images"] is True
     r = client.post("/v1/systemone", json={"state": "plain", "questions": {"q": {"type": "noul", "instructions": "ok?"}}})
     assert r.status_code == 200 and rt.calls[-1]["images"] == []
+
+
+def test_client_sends_images_in_process_and_over_http(tmp_path):
+    from jev_style import JevStyle, JevStyleError, image, noul
+    img = png()
+    f = tmp_path / "door.png"
+    f.write_bytes(img)
+    assert image(f) == {"type": "image", "format": "png", "data_base64": b64(img)}
+    assert image(png(fmt="JPEG"))["format"] == "jpg"
+    with pytest.raises(ValueError, match="PNG or JPEG"):
+        image(b"GIF89a....")
+    qs = {"open": noul("Is the door open?")}
+
+    rt = ImageRuntime()                                               # in-process: the adapter gets image_header=True
+    js = JevStyle(adapter=Adapter(rt, RT, "torch", model_id="jev-style-2b-decision-v4"))
+    assert 0 <= js.decide({"photo": "cam"}, qs, assets={"cam": image(f)})["answers"]["open"]["noul"] <= 1
+    assert rt.calls[-1] == {"state": {"photo": "<|image_1|>"}, "images": [img]}
+
+    client, rt = make(ImageRuntime())                                 # over HTTP: the header goes with the body
+    js = JevStyle(base_url="http://testserver", http_client=client)
+    js.decide({"photo": "cam"}, qs, assets={"cam": image(img)})
+    assert rt.calls[-1]["images"] == [img]
+
+    client, _ = make(TextRuntime())                                   # a text-only model refuses them clearly
+    with pytest.raises(JevStyleError) as e:
+        JevStyle(base_url="http://testserver", http_client=client).decide({"photo": "cam"}, qs,
+                                                                          assets={"cam": image(img)})
+    assert (e.value.status, e.value.code) == (400, "images_not_supported")

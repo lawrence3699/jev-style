@@ -21,7 +21,7 @@ were fitted on. Until both are set, `--cascade NAME` is refused (its tiers can s
 `tests/test_cascades.py` checks that every named cascade is either frozen or refused. Fill the README's numbers
 for it from a run of the frozen cascade, and check `jev-style releases`.
 
-## Adding a model release (done for 2b-v3 in 0.3.0)
+## Adding a model release (done for 2b-v3 in 0.3.0 and 2b-v4 in 0.6.0)
 
 The package pins every build to a Hub revision, so a new model reaches `pip` users only with a package release.
 

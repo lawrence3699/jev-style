@@ -9,9 +9,7 @@ from jev_style.models import ALIASES, DEFAULT_RELEASE, RELEASES, build_for_repo,
 def test_published_releases_are_pinned_and_named_consistently():
     assert RELEASES[DEFAULT_RELEASE].published
     for key, r in RELEASES.items():
-        assert r.model_id == r.name.lower() and "torch" in r.builds and set(r.builds) <= {"torch", "mlx", "gguf"}
-        if key != "2b-v4":                          # 2b-v4: torch only for now
-            assert set(r.builds) == {"torch", "mlx", "gguf"}
+        assert r.model_id == r.name.lower() and set(r.builds) == {"torch", "mlx", "gguf"}
         suffix = {"torch": "", "mlx": "-MLX", "gguf": "-GGUF"}
         for backend, b in r.builds.items():
             assert (b.backend, b.release, b.repo) == (backend, key, "chaoliangUNSW/" + r.name + suffix[backend])
@@ -34,7 +32,8 @@ def test_release_keys_and_aliases():
 
 def test_env_picks_the_release(monkeypatch):
     monkeypatch.setenv("JEV_STYLE_RELEASE", "2b")
-    assert get_release().key == "2b-v3"
+    assert get_release().key == "2b-v4"                              # "2b" = the newest 2B (0.6.0: v4)
+    assert get_release("2b-v3").key == "2b-v3"
     assert get_release("0.8b").key == "0.8b-v3"
 
 
@@ -74,7 +73,7 @@ def test_load_release_from_a_local_folder_needs_no_pin(monkeypatch, tmp_path):
     monkeypatch.setattr(models, "import_runtime", lambda folder, module: _Module)
     monkeypatch.setattr(models, "require_backend", lambda build: None)   # runs without torch / mlx installed (CI: [dev])
     runtime, rt, build = models.load_release("torch", release="2b", model_dir=tmp_path, device="cpu")
-    assert (build.release, build.backend, runtime.folder) == ("2b-v3", "torch", tmp_path)
+    assert (build.release, build.backend, runtime.folder) == ("2b-v4", "torch", tmp_path)
     assert runtime.kw == {"device": "cpu", "dtype": "float32", "verify": False}
     runtime, _, build = models.load_release("gguf", release="2b", model_dir=tmp_path, quant="q4_k_m", scorer="/s")
     assert runtime.kw == {"quant": "Q4_K_M", "binary": "/s", "verify": False}
@@ -220,6 +219,33 @@ def test_cuda_graphs_follow_the_device_unless_told(monkeypatch, tmp_path):
     assert graphs(device="cuda", cuda_graphs=True) is True          # an explicit choice beats the environment
 
 
+class _AutoGraphRuntime(_GraphRuntime):  # cuda_graphs=None: the runtime picks (2B v4: bfloat16 on CUDA)
+    def __init__(self, folder, device=None, dtype="float32", verify=False, cuda_graphs=None):
+        super().__init__(folder, device=device, dtype=dtype, verify=verify, cuda_graphs=cuda_graphs)
+
+
+class _AutoGraphModule:
+    JevStyleDecision = _AutoGraphRuntime
+
+
+def test_cuda_graphs_left_to_a_runtime_that_picks_them(monkeypatch, tmp_path):
+    monkeypatch.setattr(models, "import_runtime", lambda folder, module: _AutoGraphModule)
+    monkeypatch.setattr(models, "require_backend", lambda build: None)
+    monkeypatch.delenv("JEV_STYLE_CUDA_GRAPHS", raising=False)
+
+    def graphs(**kw):
+        return models.load_release("torch", release="2b-v4", model_dir=tmp_path, **kw)[0].kw["cuda_graphs"]
+
+    assert graphs(device="cuda") is None and graphs(device="cuda", dtype="bfloat16") is None    # auto: not passed
+    assert graphs(device="cuda", cuda_graphs=True) is True and graphs(device="cuda", cuda_graphs=False) is False
+    monkeypatch.setenv("JEV_STYLE_CUDA_GRAPHS", "auto")
+    assert graphs(device="cuda") is None
+    monkeypatch.setenv("JEV_STYLE_CUDA_GRAPHS", "1")
+    assert graphs(device="cuda") is True
+    monkeypatch.setenv("JEV_STYLE_CUDA_GRAPHS", "off")
+    assert graphs(device="cuda") is False
+
+
 def test_cuda_graphs_on_an_old_runtime(monkeypatch, tmp_path):
     monkeypatch.setattr(models, "import_runtime", lambda folder, module: _Module)
     monkeypatch.setattr(models, "require_backend", lambda build: None)
@@ -229,13 +255,44 @@ def test_cuda_graphs_on_an_old_runtime(monkeypatch, tmp_path):
         models.load_release("torch", release="2b", model_dir=tmp_path, device="cuda", cuda_graphs=True)
 
 
-def test_2b_v4_is_a_torch_only_release_with_its_reference_code():
+# the files of the 2B v4 repos at their pinned revisions (Hub tree, 2026-10-28), without validation/ and assets/
+HUB_2B_V4 = {
+    "torch": ["LICENSE", "NOTICE", "README.md", "SHA256SUMS.json", "chat_template.jinja", "config.json",
+              "generation_config.json", "jev_style_decision.py", "macjev_readout.json", "manifest.json",
+              "model-00001-of-00003.safetensors", "model-00002-of-00003.safetensors",
+              "model-00003-of-00003.safetensors", "model.safetensors.index.json", "preprocessor_config.json",
+              "readout_config.json", "release_config.json", "requirements.txt", "tokenizer.json",
+              "tokenizer_config.json", "video_preprocessor_config.json", "src/macjev/__init__.py",
+              "src/macjev/backbone.py", "src/macjev/eval/__init__.py", "src/macjev/runtime/v4_engine.py"],
+    "gguf": ["Jev-Style-2B-Decision-v4-F16.gguf", "Jev-Style-2B-Decision-v4-Q4_K_M.gguf",
+             "Jev-Style-2B-Decision-v4-Q8_0.gguf", "LICENSE", "NOTICE", "README.md", "build_jev_score.sh",
+             "jev_score_v2.cpp", "jev_style_decision_gguf.py", "manifest.json", "readout_config.json",
+             "release_config.json", "requirements.txt", "tokenizer/tokenizer.json", "tokenizer/tokenizer_config.json"],
+    "mlx": ["LICENSE", "NOTICE", "README.md", "THIRD_PARTY_NOTICES.md", "config.json", "jev_style_decision_mlx.py",
+            "manifest.json", "readout_config.json", "release_config.json", "requirements.txt"]
+           + [f"{p}/{f}" for p in ("bf16", "8bit") for f in (
+               "chat_template.jinja", "config.json", "generation_config.json", "macjev_norms_fp32.safetensors",
+               "model.safetensors", "model.safetensors.index.json", "tokenizer.json", "tokenizer_config.json")],
+}
+
+
+def test_2b_v4_patterns_select_what_the_runtimes_need():
+    from huggingface_hub.utils import filter_repo_objects
     r = RELEASES["2b-v4"]
-    assert set(r.builds) == {"torch"} and r.builds["torch"].repo == "chaoliangUNSW/Jev-Style-2B-Decision-v4"
-    pats = models.patterns_for(r.builds["torch"])
-    for f in ("jev_style_decision.py", "macjev_readout.json", "preprocessor_config.json", "src/macjev/*",
-              "*.safetensors", "model.safetensors.index.json"):
-        assert f in pats
-    with pytest.raises(ValueError, match="no mlx build"):
-        models.resolve_backend("mlx", "2b-v4")
-    assert models.resolve_backend("auto", "2b-v4") == "torch"
+    assert r.published and ALIASES["2b"] == "2b-v4"
+    assert {b: r.builds[b].repo for b in r.builds} == {
+        "torch": "chaoliangUNSW/Jev-Style-2B-Decision-v4", "mlx": "chaoliangUNSW/Jev-Style-2B-Decision-v4-MLX",
+        "gguf": "chaoliangUNSW/Jev-Style-2B-Decision-v4-GGUF"}
+
+    def pick(backend, **kw):
+        return set(filter_repo_objects(HUB_2B_V4[backend], allow_patterns=models.patterns_for(r.builds[backend], **kw)))
+    torch = pick("torch")
+    assert set(HUB_2B_V4["torch"]) - torch == {"README.md"}           # the reference scorer under src/ included
+    gguf = pick("gguf", quant="q4_k_m")
+    assert {"jev_score_v2.cpp", "build_jev_score.sh", "jev_style_decision_gguf.py", "tokenizer/tokenizer.json"} <= gguf
+    assert [f for f in gguf if f.endswith(".gguf")] == ["Jev-Style-2B-Decision-v4-Q4_K_M.gguf"]
+    assert r.builds["gguf"].extra["scorer_bin"] == "jev-score-v2"
+    mlx = pick("mlx", precision="bf16")
+    assert {"config.json", "THIRD_PARTY_NOTICES.md", "bf16/model.safetensors", "bf16/macjev_norms_fp32.safetensors"} <= mlx
+    assert not any(f.startswith("8bit/") for f in mlx)
+    assert r.builds["mlx"].extra["mlx_lm"] == "0.31.3" and not r.builds["mlx"].extra["prefix_sharing"]

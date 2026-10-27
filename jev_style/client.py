@@ -17,6 +17,9 @@
     })
     out["answers"]["team"]["choice"]
 
+    js = JevStyle(release="2b")                          # images (2B v4): the state refers to them by key
+    js.decide({"receipt": "r1"}, {"over": noul("Is the total over 50?")}, assets={"r1": image("receipt.jpg")})
+
 ``decide`` returns exactly the HTTP response body of ``POST /v1/systemone`` and raises
 ``JevStyleError`` (status, code, message, question) for the contract's error bodies.
 
@@ -55,6 +58,19 @@ def choice(instructions: Any, options: Mapping[str, Any] | Iterable[str]) -> dic
 
 def score(instructions: Any, levels: Iterable[Any]) -> dict:
     return {"type": "score", "instructions": instructions, "criteria": list(levels)}
+
+
+def image(src: Any, format: str | None = None) -> dict:
+    """An ``assets`` entry for ``decide(..., assets=...)``: a PNG or JPEG file path or its bytes ->
+    {"type": "image", "format": "png" | "jpg", "data_base64": ...}, the form TypeSafe's API takes."""
+    import base64
+    from pathlib import Path
+    data = bytes(src) if isinstance(src, (bytes, bytearray, memoryview)) else Path(src).expanduser().read_bytes()
+    if format is None:
+        format = "png" if data.startswith(b"\x89PNG\r\n\x1a\n") else "jpg" if data.startswith(b"\xff\xd8\xff") else None
+        if format is None:
+            raise ValueError("not a PNG or JPEG image (the only formats the API takes); pass format= to override")
+    return {"type": "image", "format": format, "data_base64": base64.b64encode(data).decode("ascii")}
 
 
 class JevStyle:
@@ -112,17 +128,27 @@ class JevStyle:
                           err.get("question"), body)
 
     # -- API ---------------------------------------------------------------------------------
-    def decide(self, state: Any, questions: Mapping[str, dict], model: str | None = None) -> dict:
+    def decide(self, state: Any, questions: Mapping[str, dict], model: str | None = None,
+               assets: Mapping[str, Any] | None = None) -> dict:
+        """``assets``: images that string values in ``state`` refer to by key, e.g. {"r1": image("receipt.jpg")}
+        (models that read images: 2B v4). Sent the way TypeSafe's API takes them, with the header
+        ``TypeSafe-Danger-Zone-Images: true``; a text-only model answers 400 ``images_not_supported``."""
         body: dict = {"state": state, "questions": dict(questions)}
         if model:
             body["model"] = model
+        if assets:
+            body["assets"] = dict(assets)
         if self._adapter is not None:
             from .schema import ApiError
+            kw = {"image_header": True} if assets and _takes(self._adapter.systemone, "image_header") else {}
             try:
-                return self._adapter.systemone(body)
+                return self._adapter.systemone(body, **kw)
             except ApiError as e:
                 raise JevStyleError(e.status, e.code, e.message, e.question, e.body()) from None
-        resp = self._client().post("/v1/systemone", json=body, headers=self._headers())
+        headers = self._headers()
+        if assets:
+            headers["TypeSafe-Danger-Zone-Images"] = "true"
+        resp = self._client().post("/v1/systemone", json=body, headers=headers)
         if resp.status_code != 200:
             self._raise(resp)
         return resp.json()
@@ -144,6 +170,14 @@ class JevStyle:
 
     def __exit__(self, *exc: Any) -> None:
         self.close()
+
+
+def _takes(fn: Any, name: str) -> bool:
+    import inspect
+    try:
+        return name in inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
 
 
 # -- engine targets ---------------------------------------------------------------------------------
@@ -230,9 +264,10 @@ def default_client() -> JevStyle:
         return _default
 
 
-def decide(state: Any, questions: Mapping[str, dict], model: str | None = None) -> dict:
+def decide(state: Any, questions: Mapping[str, dict], model: str | None = None,
+           assets: Mapping[str, Any] | None = None) -> dict:
     """``JevStyle.decide`` on the shared client."""
-    return default_client().decide(state, questions, model=model)
+    return default_client().decide(state, questions, model=model, assets=assets)
 
 
 def classify(state: Any, labels: Mapping[str, Any] | Iterable[str],

@@ -3,6 +3,32 @@
 Versions follow [semantic versioning](https://semver.org/). Each release pins the model revisions it loads
 (`jev_style/models.py`), so upgrading the package is what changes the weights you get.
 
+## 0.6.0 (2026-10-28)
+
+- **Jev-Style-2B-Decision-v4** (`--release 2b-v4`), all three builds pinned: torch @ c9504148, MLX @ a14bbe4d,
+  GGUF @ 9111d5d2. The first Jev-Style model that reads images (PyTorch build; the MLX and GGUF builds read text
+  only), 32,768 tokens per call. Its PyTorch runtime ships the reference scorer it was evaluated with (`src/macjev/`)
+  and needs the image processor, so the `torch` extra now also installs `pillow` and `torchvision`. Its MLX build
+  needs mlx-lm 0.31.3 exactly and its GGUF build the `jev-score-v2` scorer, as for `2b-v3` (one binary serves both).
+  Trained in part on soft labels distilled from TypeSafe Jev 1.14 via its public API (see its model card).
+- **`--release 2b` now means `2b-v4`** (`JevStyle(release="2b")`, `JEV_STYLE_RELEASE=2b`, `local:2b` targets). Use
+  `2b-v3` to keep the v3 weights; `cascade-9b` and the example cascades name `2b-v3` explicitly and are unchanged.
+  The default release is still `0.8b-v3`.
+- **Images in requests, the way TypeSafe's API takes them** (Jev 1.13 / 1.14): `assets` with `data_base64`, or
+  multipart bodies with one file part per image, plus the header `TypeSafe-Danger-Zone-Images: true`. A string value
+  in `state` that names an asset becomes the image (`<|image_k|>` in reading order); a reference in a question's
+  instructions or criteria is refused (this model reads images as part of the state). TypeSafe's limits: still PNG
+  or JPEG, 16 MiB per image, 280 to 1,568 px per side, 32 MiB in total. Models that read text only (0.8B, 2B v3,
+  every MLX and GGUF build) keep answering 400 `images_not_supported`. `GET /v1/models` reports `images` and `box`.
+- **Python client:** `JevStyle.decide(..., assets={...})` and `jev_style.decide(..., assets=...)` send images
+  (in-process, or over HTTP with the header), and `jev_style.image(path_or_bytes)` builds an `assets` entry.
+- **CUDA graphs under `auto`:** a runtime whose own `cuda_graphs` default is auto (the 2B v4) now makes the choice
+  itself: graphs with bfloat16 on CUDA, none in float32, where its forward is compute-bound and recording costs about
+  a minute for little gain. The v3 runtimes keep 0.4.0's behaviour (on whenever they run on CUDA).
+  `--cuda-graphs on|off`, `JEV_STYLE_CUDA_GRAPHS` and `cuda_graphs=` still override it; `JEV_STYLE_CUDA_GRAPHS=auto`
+  now means auto.
+- `jev-style releases` no longer prints an empty alias field for a release without an alias.
+
 ## 0.5.0 (2026-10-17)
 
 Compatibility with TypeSafe's API as of Jev 1.14 and the official SDKs (Python 0.7.5, JavaScript 0.7.0).

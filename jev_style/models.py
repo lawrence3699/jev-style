@@ -5,11 +5,11 @@ input rendering, verdict readout, calibration temperatures and token budgets all
 module only picks a build, downloads a pinned revision and imports that runtime, so the server gives
 exactly the answers the model card documents.
 
-Releases (``--release`` / ``JevStyle(release=...)``; default ``0.8b-v3``):
+Releases (``--release`` / ``JevStyle(release=...)``; default ``0.8b-v3``; ``0.8b`` / ``2b`` = the newest of each size):
 
 * ``0.8b-v3``  chaoliangUNSW/Jev-Style-0.8B-Decision-v3[-MLX|-GGUF]
 * ``2b-v3``    chaoliangUNSW/Jev-Style-2B-Decision-v3[-MLX|-GGUF]
-* ``2b-v4``    chaoliangUNSW/Jev-Style-2B-Decision-v4 (torch only; text and images)
+* ``2b-v4``    chaoliangUNSW/Jev-Style-2B-Decision-v4[-MLX|-GGUF] (images: the torch build; MLX and GGUF read text only)
 
 Backends:
 
@@ -117,14 +117,21 @@ RELEASES: dict[str, Release] = {
         ("*.safetensors", "model.safetensors.index.json"), mlx_prefix_sharing=False,
         mlx_extra=("config.json", "THIRD_PARTY_NOTICES.md"), mlx_lm="0.31.3",
         scorer_src="jev_score_v2.cpp", scorer_bin="jev-score-v2", scorer_env="JEV_SCORE_V2_BIN"),
-    # 2B v4: text and images (Jev 1.14 ``assets``), one PyTorch build for now (MLX / GGUF later). Its runtime runs the
-    # reference scorer the model was evaluated with; it has no CUDA-graph path. Not pinned until it is published.
+    # 2B v4: text and images (Jev 1.14 ``assets``) in the PyTorch build, text only in the MLX and GGUF builds. Its
+    # PyTorch runtime runs the reference scorer the model was evaluated with and picks its own speed paths (CUDA graphs
+    # with bfloat16 on CUDA). MLX and GGUF as for 2b-v3: mlx-lm 0.31.3 exactly, and the jev-score-v2 scorer (the GGUF
+    # repo ships the 2b-v3 scorer source unchanged, so one jev-score-v2 binary serves both).
     "2b-v4": _release(
-        "2b-v4", "Jev-Style-2B-Decision-v4", "Jev-Style 2B Decision v4", "jev-style-2b-decision-v4", None,
-        {"torch": None}, ("*.safetensors", "model.safetensors.index.json"), backends=("torch",),
+        "2b-v4", "Jev-Style-2B-Decision-v4", "Jev-Style 2B Decision v4", "jev-style-2b-decision-v4",
+        "2026-10-27",
+        {"torch": "c9504148dae7f7a43d67a5782f12a015a4b4022c",
+         "mlx": "a14bbe4dafb154f0b05884314c8e227b1c6a5cd6", "gguf": "9111d5d232d21d52593c4c10f1e8cfa6561669f6"},
+        ("*.safetensors", "model.safetensors.index.json"), mlx_prefix_sharing=False,
+        mlx_extra=("config.json", "THIRD_PARTY_NOTICES.md"), mlx_lm="0.31.3",
+        scorer_src="jev_score_v2.cpp", scorer_bin="jev-score-v2", scorer_env="JEV_SCORE_V2_BIN",
         torch_files=_TORCH_FILES_V4),
 }
-ALIASES = {"0.8b": "0.8b-v3", "2b": "2b-v3"}
+ALIASES = {"0.8b": "0.8b-v3", "2b": "2b-v4"}
 DEFAULT_RELEASE = "0.8b-v3"
 
 # the default release, under the names 0.2.x exported
@@ -276,9 +283,10 @@ def load_release(backend: str = "auto", *, release: str | None = None, model_dir
     """-> (runtime object, runtime module, build). ``model_dir`` skips the download; ``repo`` picks the build (and
     so the release and backend) from a Hub repo id instead of ``release`` and ``backend``.
 
-    ``cuda_graphs`` (torch backend): True / False, or None = $JEV_STYLE_CUDA_GRAPHS if set, else on whenever the
-    model runs on CUDA. Runtimes older than the CUDA-graph releases do not take the option: then None / False load
-    them as before and True is refused."""
+    ``cuda_graphs`` (torch backend): True / False, or None = $JEV_STYLE_CUDA_GRAPHS if set, else the runtime's own
+    default when it has one (2B v4: on for bfloat16 on CUDA), else on whenever the model runs on CUDA (the v3
+    runtimes, whose default is off). Runtimes older than the CUDA-graph releases do not take the option: then None /
+    False load them as before and True is refused."""
     if repo:
         build = build_for_repo(repo, trust_remote_code=trust_remote_code)
     else:
@@ -293,8 +301,11 @@ def load_release(backend: str = "auto", *, release: str | None = None, model_dir
     if backend == "torch":
         device = device or os.environ.get("JEV_STYLE_DEVICE") or os.environ.get("JEV_DEVICE") or None
         kw = {}
-        if "cuda_graphs" in inspect.signature(cls).parameters:
-            kw["cuda_graphs"] = _want_cuda_graphs(cuda_graphs, device)
+        param = inspect.signature(cls).parameters.get("cuda_graphs")
+        if param is not None:
+            want = _want_cuda_graphs(cuda_graphs, device, runtime_decides=param.default is None)
+            if want is not None:
+                kw["cuda_graphs"] = want
         elif cuda_graphs:
             raise ValueError(f"the {build.repo} runtime at this revision has no CUDA-graph path (cuda_graphs=True)")
         runtime = cls(folder, device=device, dtype=dtype, verify=verify, **kw)
@@ -305,13 +316,16 @@ def load_release(backend: str = "auto", *, release: str | None = None, model_dir
     return runtime, rt, build
 
 
-def _want_cuda_graphs(flag: bool | None, device: str | None) -> bool:
+def _want_cuda_graphs(flag: bool | None, device: str | None, runtime_decides: bool = False) -> bool | None:
+    """cuda_graphs= for the runtime; None = leave it to the runtime's own default (``runtime_decides``)."""
     if flag is None:
         env = os.environ.get("JEV_STYLE_CUDA_GRAPHS", "").strip().lower()
-        if env:
+        if env and env != "auto":
             flag = env not in ("0", "false", "no", "off")
     if flag is not None:
         return bool(flag)
+    if runtime_decides:                             # 2B v4: on for bfloat16 on CUDA; in float32 they gain little
+        return None
     if device:
         return str(device).split(":", 1)[0] == "cuda"
     import torch

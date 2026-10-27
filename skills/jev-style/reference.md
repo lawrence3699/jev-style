@@ -7,7 +7,8 @@ Source and full docs: https://github.com/lawrence3699/jev-style
 | Field | |
 |---|---|
 | `model` | optional, ignored (one model per server) |
-| `state` | string, or JSON object/array (serialised for the model) |
+| `state` | string, or JSON object/array (serialised for the model); string values may name an image in `assets` |
+| `assets` | optional, models that read images only (2B v4 on PyTorch): `{key: {"type": "image", "format": "png" \| "jpg", "data_base64": "..."}}`; needs the header `TypeSafe-Danger-Zone-Images: true` |
 | `questions` | `{id: question}`, at least one |
 | `question.type` | `noul`, `choice` or `score` |
 | `question.instructions` | string, or JSON object/array (sent as compact JSON) |
@@ -40,13 +41,24 @@ Source and full docs: https://github.com/lawrence3699/jev-style
 |---|---|---|
 | 422 | `invalid_json`, `invalid_request` | body or top-level fields wrong |
 | 422 | `invalid_question` | one question is malformed; `question` names it |
-| 400 | `max_tokens_exceeded` | a question with its options is over 2,048 tokens, or state + question is over 25,600; `message` says which (nothing is truncated). Servers before 0.5.0 answered 422 `input_budget_exceeded` |
+| 400 | `max_tokens_exceeded` | the input is over the model's budget: state + question over 25,600 tokens (2B v4: 32,768, image tokens included), or with the 0.8B a question with its options over 2,048; `message` says which (nothing is truncated). Servers before 0.5.0 answered 422 `input_budget_exceeded` |
 | 400 | `invalid_encoding`, `nesting_too_deep`, `non_finite_number`, `invalid_compressed_body` | a request rule is broken: not UTF-8 or a byte order mark, over 64 nested levels in `state` / `instructions` / `criteria`, NaN / Infinity / 1e400, a malformed compressed body |
-| 400 | `images_not_supported`, `unsupported_question_type` | `assets` (images), multipart bodies or `box` questions: the model reads text only |
+| 400 | `images_not_supported` | `assets` or multipart bodies for a model that reads text only, or an image reference in a question's instructions / criteria (images belong in `state`) |
+| 400 | `unsupported_question_type` | `box` questions |
+| 400 | `images_header_required`, `invalid_image`, `invalid_multipart` | images without `TypeSafe-Danger-Zone-Images: true`; an image that is not a still PNG / JPEG of 280..1568 px per side (78,400..2,458,624 px), an unused or missing asset; a malformed multipart body |
+| 413 | `image_too_large`, `reference_too_long` | an image over 16 MiB; reference keys over 1,024 bytes each or 65,536 together |
 | 413 | `payload_too_large` | body over 32 MiB, compressed or decompressed |
 | 415 | `unsupported_content_encoding` | a `Content-Encoding` other than one layer of `gzip`, `x-gzip` or `zstd` |
 | 401 | `unauthorized` | server has a key and the bearer is missing or wrong |
 | 404 / 500 | `not_found` / `internal_error` | unknown route / server-side failure |
+
+## Images (2B v4)
+
+A reference is an asset key matched as plain text inside a string value of `state`: a value equal to the key is
+the image; in a longer string every occurrence is replaced (left to right) and each use adds the image again.
+Object keys are never replaced. Multipart works as in TypeSafe's API: a first part `request` (the JSON body with
+`{"part": "<file part name>"}` in place of `format` + `data_base64`) and one file part per image. Image tokens count
+toward the 32,768-token budget (about one token per 32 x 32 px).
 
 ## Writing good questions
 
