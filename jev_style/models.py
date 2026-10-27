@@ -257,9 +257,26 @@ def download(backend: str = "auto", *, precision: str = "bf16", quant: str = "Q8
                          "model_dir, or pass trust_remote_code=True to load the repo's main branch.")
     kw = dict(revision=revision or build.revision, allow_patterns=patterns_for(build, precision, quant))
     try:                                   # pinned revision already cached: no network round trip
-        return Path(snapshot_download(build.repo, local_files_only=True, **kw))
+        folder = Path(snapshot_download(build.repo, local_files_only=True, **kw))
+        if cached_complete(folder, kw["allow_patterns"]):
+            return folder
     except Exception:  # noqa: BLE001 - not cached (or partly): download
-        return Path(snapshot_download(build.repo, **kw))
+        pass
+    return Path(snapshot_download(build.repo, **kw))
+
+
+def cached_complete(folder: Path, patterns: list[str]) -> bool:
+    """Every file of the folder's manifest.json that ``patterns`` select is present. A cached snapshot of the pinned
+    revision can hold only some of them: another precision or quant, or one file fetched with ``hf_hub_download``;
+    huggingface_hub before 2.x returns such a folder from ``local_files_only=True`` without checking."""
+    import fnmatch
+    import json
+    try:
+        names = json.loads((folder / "manifest.json").read_text())["files"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    want = [n for n in names if any(fnmatch.fnmatchcase(n, pat) for pat in patterns)]
+    return bool(want) and all((folder / n).is_file() for n in want)
 
 
 def import_runtime(model_dir: Path, module: str) -> ModuleType:

@@ -296,3 +296,28 @@ def test_2b_v4_patterns_select_what_the_runtimes_need():
     assert {"config.json", "THIRD_PARTY_NOTICES.md", "bf16/model.safetensors", "bf16/macjev_norms_fp32.safetensors"} <= mlx
     assert not any(f.startswith("8bit/") for f in mlx)
     assert r.builds["mlx"].extra["mlx_lm"] == "0.31.3" and not r.builds["mlx"].extra["prefix_sharing"]
+
+
+def test_download_skips_a_partly_cached_snapshot(monkeypatch, tmp_path):
+    """A cached snapshot of the pinned revision that lacks a selected file (another quant, or one file fetched with
+    hf_hub_download) must not be used as is: download() goes to the network (0.6.0 fix)."""
+    import json as _json
+    import huggingface_hub
+    build = RELEASES["2b-v4"].builds["gguf"]
+    names = ["manifest.json", "jev_style_decision_gguf.py", "jev_score_v2.cpp", "build_jev_score.sh",
+             "tokenizer/tokenizer.json", "Jev-Style-2B-Decision-v4-Q8_0.gguf", "Jev-Style-2B-Decision-v4-F16.gguf"]
+    (tmp_path / "tokenizer").mkdir()
+    (tmp_path / "manifest.json").write_text(_json.dumps({"files": {n: {} for n in names if n != "manifest.json"}}))
+    for n in names[1:6]:                                              # Q8_0 cached, F16 not
+        (tmp_path / n).write_text("x")
+    calls = []
+
+    def fake_snapshot(repo, local_files_only=False, **kw):
+        calls.append(local_files_only)
+        return str(tmp_path)
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", fake_snapshot)
+    assert models.download(build=build, quant="Q8_0") == tmp_path and calls == [True]
+    calls.clear()
+    models.download(build=build, quant="F16")
+    assert calls == [True, False]                                    # incomplete -> network download
+    assert not models.cached_complete(tmp_path / "missing", ["*"])

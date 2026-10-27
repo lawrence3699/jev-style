@@ -27,6 +27,10 @@ Versions follow [semantic versioning](https://semver.org/). Each release pins th
   a minute for little gain. The v3 runtimes keep 0.4.0's behaviour (on whenever they run on CUDA).
   `--cuda-graphs on|off`, `JEV_STYLE_CUDA_GRAPHS` and `cuda_graphs=` still override it; `JEV_STYLE_CUDA_GRAPHS=auto`
   now means auto.
+- **Downloads:** a cached snapshot of the pinned revision is used without a network call only when it holds every
+  file the build needs (checked against its `manifest.json`). With huggingface_hub before 2.x, a snapshot holding
+  only some of them (another MLX precision or GGUF quant, or one file fetched with `hf_hub_download`) was used as
+  is and loading failed with `jev_style_decision*.py not found` or a missing weights file.
 - `jev-style releases` no longer prints an empty alias field for a release without an alias.
 
 ## 0.5.0 (2026-10-17)
