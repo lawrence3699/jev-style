@@ -26,6 +26,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import __version__, discovery
 from .adapter import Adapter
+from .assets import header_on, split_multipart
 from .schema import MAX_BODY_BYTES, ApiError, decode_body, parse_json
 
 log = logging.getLogger("jev_style.serve")
@@ -99,12 +100,22 @@ def create_app(adapter: Adapter | Any, *, api_key: str | None = None, web_dir: P
 
     @app.post("/v1/systemone", dependencies=[Depends(require_auth)])
     async def systemone(request: Request):
-        if request.headers.get("content-type", "").lower().startswith("multipart/"):
-            raise ApiError(400, "images_not_supported", "this model reads text only; multipart requests (images) "
-                           "are not supported")
-        raw = await _read_body(request)
-        body = parse_json(await run_in_threadpool(decode_body, raw, request.headers.get("content-encoding")))
-        return JSONResponse(await run_in_threadpool(app.state.adapter.systemone, body))
+        adapter = app.state.adapter
+        images_ok = bool(getattr(adapter, "supports_images", False))
+        ctype = request.headers.get("content-type", "")
+        if ctype.lower().startswith("multipart/"):
+            if not images_ok:
+                raise ApiError(400, "images_not_supported", "this model reads text only; multipart requests (images) "
+                               "are not supported")
+            raw = await _read_body(request)
+            body, parts = await run_in_threadpool(split_multipart, raw, ctype)
+        else:
+            raw = await _read_body(request)
+            body, parts = parse_json(await run_in_threadpool(decode_body, raw, request.headers.get("content-encoding"))), None
+        if not images_ok:
+            return JSONResponse(await run_in_threadpool(adapter.systemone, body))
+        return JSONResponse(await run_in_threadpool(lambda: adapter.systemone(body, parts=parts,
+                                                                              image_header=header_on(request.headers))))
 
     @app.get("/v1/models", dependencies=[Depends(require_auth)])
     async def models():

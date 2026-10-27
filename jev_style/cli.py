@@ -41,12 +41,13 @@ def _model_args(ap: argparse.ArgumentParser) -> None:
                     help="torch device (default: $JEV_STYLE_DEVICE, else the best available)")
     ap.add_argument("--dtype", default="float32", choices=("float32", "bfloat16", "float16"), help="torch dtype")
     ap.add_argument("--cuda-graphs", default="auto", choices=("auto", "on", "off"),
-                    help="torch on CUDA: record CUDA graphs at start-up for much faster short inputs (auto = on when "
-                         "the model runs on CUDA, or $JEV_STYLE_CUDA_GRAPHS)")
+                    help="torch on CUDA: record CUDA graphs at start-up for much faster short inputs (auto = "
+                         "$JEV_STYLE_CUDA_GRAPHS, else the model's own default: 2b-v4 on CUDA with --dtype bfloat16, "
+                         "the v3 releases whenever they run on CUDA)")
     ap.add_argument("--precision", default="bf16", choices=("bf16", "8bit"), help="mlx weights")
     ap.add_argument("--quant", default="Q8_0", choices=("F16", "Q8_0", "Q4_K_M"), help="gguf file")
-    ap.add_argument("--scorer", help="gguf backend: path to the release's scorer binary (0.8b: jev-score, default "
-                                      "$JEV_SCORE_BIN; 2b: jev-score-v2, default $JEV_SCORE_V2_BIN)")
+    ap.add_argument("--scorer", help="gguf backend: path to the release's scorer binary (0.8b-v3: jev-score, default "
+                                      "$JEV_SCORE_BIN; 2b-v3 / 2b-v4: jev-score-v2, default $JEV_SCORE_V2_BIN)")
     ap.add_argument("--fake", action="store_true", help="deterministic fake engine, no model (tests / UI work)")
     ap.add_argument("--cascade", metavar="NAME_OR_FILE",
                     help="a confidence cascade: a name from `jev-style releases` (e.g. cascade-9b) or a cascade file. "
@@ -141,7 +142,7 @@ def cmd_releases(args: argparse.Namespace) -> int:
     for k, r in RELEASES.items():
         tags = [a for a, key in ALIASES.items() if key == k] + (["default"] if k == DEFAULT_RELEASE else [])
         state = r.release_date if r.published else "not published in this version"
-        print(f"  {k:<9} {r.model_id}  ({', '.join(tags)}; {state})")
+        print(f"  {k:<9} {r.model_id}  ({'; '.join(filter(None, (', '.join(tags), state)))})")
         for b in r.builds.values():
             print(f"      {b.backend:<6} {b.repo} @ {b.revision[:8] if b.revision else 'unpinned'}")
     print("\nnamed cascades (--cascade NAME):")

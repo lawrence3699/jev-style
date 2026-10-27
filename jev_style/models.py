@@ -5,10 +5,11 @@ input rendering, verdict readout, calibration temperatures and token budgets all
 module only picks a build, downloads a pinned revision and imports that runtime, so the server gives
 exactly the answers the model card documents.
 
-Releases (``--release`` / ``JevStyle(release=...)``; default ``0.8b-v3``), each with three builds:
+Releases (``--release`` / ``JevStyle(release=...)``; default ``0.8b-v3``; ``0.8b`` / ``2b`` = the newest of each size):
 
 * ``0.8b-v3``  chaoliangUNSW/Jev-Style-0.8B-Decision-v3[-MLX|-GGUF]
 * ``2b-v3``    chaoliangUNSW/Jev-Style-2B-Decision-v3[-MLX|-GGUF]
+* ``2b-v4``    chaoliangUNSW/Jev-Style-2B-Decision-v4[-MLX|-GGUF] (images: the torch build; MLX and GGUF read text only)
 
 Backends:
 
@@ -68,24 +69,32 @@ _TORCH_FILES = ("jev_style_decision.py", "config.json", "generation_config.json"
                 "tokenizer.json", "tokenizer_config.json")
 
 
+# 2B v4 (multimodal Qwen3.5 export): the runtime calls the reference scorer it ships under src/macjev/ and reads the
+# image processor configs and macjev_readout.json next to the weights.
+_TORCH_FILES_V4 = _TORCH_FILES + ("preprocessor_config.json", "video_preprocessor_config.json", "macjev_readout.json",
+                                  "SHA256SUMS.json", "src/macjev/*")
+
+
 def _release(key: str, name: str, title: str, model_id: str, release_date: str | None,
-             revisions: dict[str, str | None], torch_weights: tuple[str, ...], mlx_prefix_sharing: bool,
+             revisions: dict[str, str | None], torch_weights: tuple[str, ...], mlx_prefix_sharing: bool = False,
              mlx_extra: tuple[str, ...] = (), mlx_lm: str | None = None, scorer_src: str = "jev_score.cpp",
-             scorer_bin: str = "jev-score", scorer_env: str = "JEV_SCORE_BIN") -> Release:
+             scorer_bin: str = "jev-score", scorer_env: str = "JEV_SCORE_BIN",
+             backends: tuple[str, ...] = ("torch", "mlx", "gguf"),
+             torch_files: tuple[str, ...] = _TORCH_FILES) -> Release:
     repo = "chaoliangUNSW/" + name
     builds = {
         "torch": Build("torch", repo, revisions["torch"], "jev_style_decision", "JevStyleDecision",
-                       _COMMON + _TORCH_FILES + torch_weights, release=key),
-        "mlx": Build("mlx", repo + "-MLX", revisions["mlx"], "jev_style_decision_mlx", "JevStyleDecisionMLX",
+                       _COMMON + torch_files + torch_weights, release=key),
+        "mlx": Build("mlx", repo + "-MLX", revisions.get("mlx"), "jev_style_decision_mlx", "JevStyleDecisionMLX",
                      _COMMON + ("jev_style_decision_mlx.py",) + mlx_extra,
                      {"precision_patterns": "{precision}/*", "prefix_sharing": mlx_prefix_sharing,
                       "mlx_lm": mlx_lm}, release=key),
-        "gguf": Build("gguf", repo + "-GGUF", revisions["gguf"], "jev_style_decision_gguf", "JevStyleDecisionGGUF",
+        "gguf": Build("gguf", repo + "-GGUF", revisions.get("gguf"), "jev_style_decision_gguf", "JevStyleDecisionGGUF",
                       _COMMON + ("jev_style_decision_gguf.py", scorer_src, "build_jev_score.sh", "tokenizer/*"),
                       {"quant_file": name + "-{quant}.gguf", "scorer_bin": scorer_bin, "scorer_env": scorer_env},
                       release=key),
     }
-    return Release(key, model_id, name, title, release_date, builds)
+    return Release(key, model_id, name, title, release_date, {b: builds[b] for b in backends})
 
 
 # The torch builds pin the main repos' CUDA-graph runtimes (0.4.0; JevStyleDecision takes cuda_graphs=). The 0.8B
@@ -108,8 +117,21 @@ RELEASES: dict[str, Release] = {
         ("*.safetensors", "model.safetensors.index.json"), mlx_prefix_sharing=False,
         mlx_extra=("config.json", "THIRD_PARTY_NOTICES.md"), mlx_lm="0.31.3",
         scorer_src="jev_score_v2.cpp", scorer_bin="jev-score-v2", scorer_env="JEV_SCORE_V2_BIN"),
+    # 2B v4: text and images (Jev 1.14 ``assets``) in the PyTorch build, text only in the MLX and GGUF builds. Its
+    # PyTorch runtime runs the reference scorer the model was evaluated with and picks its own speed paths (CUDA graphs
+    # with bfloat16 on CUDA). MLX and GGUF as for 2b-v3: mlx-lm 0.31.3 exactly, and the jev-score-v2 scorer (the GGUF
+    # repo ships the 2b-v3 scorer source unchanged, so one jev-score-v2 binary serves both).
+    "2b-v4": _release(
+        "2b-v4", "Jev-Style-2B-Decision-v4", "Jev-Style 2B Decision v4", "jev-style-2b-decision-v4",
+        "2026-10-27",
+        {"torch": "c9504148dae7f7a43d67a5782f12a015a4b4022c",
+         "mlx": "a14bbe4dafb154f0b05884314c8e227b1c6a5cd6", "gguf": "9111d5d232d21d52593c4c10f1e8cfa6561669f6"},
+        ("*.safetensors", "model.safetensors.index.json"), mlx_prefix_sharing=False,
+        mlx_extra=("config.json", "THIRD_PARTY_NOTICES.md"), mlx_lm="0.31.3",
+        scorer_src="jev_score_v2.cpp", scorer_bin="jev-score-v2", scorer_env="JEV_SCORE_V2_BIN",
+        torch_files=_TORCH_FILES_V4),
 }
-ALIASES = {"0.8b": "0.8b-v3", "2b": "2b-v3"}
+ALIASES = {"0.8b": "0.8b-v3", "2b": "2b-v4"}
 DEFAULT_RELEASE = "0.8b-v3"
 
 # the default release, under the names 0.2.x exported
@@ -235,9 +257,26 @@ def download(backend: str = "auto", *, precision: str = "bf16", quant: str = "Q8
                          "model_dir, or pass trust_remote_code=True to load the repo's main branch.")
     kw = dict(revision=revision or build.revision, allow_patterns=patterns_for(build, precision, quant))
     try:                                   # pinned revision already cached: no network round trip
-        return Path(snapshot_download(build.repo, local_files_only=True, **kw))
+        folder = Path(snapshot_download(build.repo, local_files_only=True, **kw))
+        if cached_complete(folder, kw["allow_patterns"]):
+            return folder
     except Exception:  # noqa: BLE001 - not cached (or partly): download
-        return Path(snapshot_download(build.repo, **kw))
+        pass
+    return Path(snapshot_download(build.repo, **kw))
+
+
+def cached_complete(folder: Path, patterns: list[str]) -> bool:
+    """Every file of the folder's manifest.json that ``patterns`` select is present. A cached snapshot of the pinned
+    revision can hold only some of them: another precision or quant, or one file fetched with ``hf_hub_download``;
+    huggingface_hub before 2.x returns such a folder from ``local_files_only=True`` without checking."""
+    import fnmatch
+    import json
+    try:
+        names = json.loads((folder / "manifest.json").read_text())["files"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    want = [n for n in names if any(fnmatch.fnmatchcase(n, pat) for pat in patterns)]
+    return bool(want) and all((folder / n).is_file() for n in want)
 
 
 def import_runtime(model_dir: Path, module: str) -> ModuleType:
@@ -261,9 +300,10 @@ def load_release(backend: str = "auto", *, release: str | None = None, model_dir
     """-> (runtime object, runtime module, build). ``model_dir`` skips the download; ``repo`` picks the build (and
     so the release and backend) from a Hub repo id instead of ``release`` and ``backend``.
 
-    ``cuda_graphs`` (torch backend): True / False, or None = $JEV_STYLE_CUDA_GRAPHS if set, else on whenever the
-    model runs on CUDA. Runtimes older than the CUDA-graph releases do not take the option: then None / False load
-    them as before and True is refused."""
+    ``cuda_graphs`` (torch backend): True / False, or None = $JEV_STYLE_CUDA_GRAPHS if set, else the runtime's own
+    default when it has one (2B v4: on for bfloat16 on CUDA), else on whenever the model runs on CUDA (the v3
+    runtimes, whose default is off). Runtimes older than the CUDA-graph releases do not take the option: then None /
+    False load them as before and True is refused."""
     if repo:
         build = build_for_repo(repo, trust_remote_code=trust_remote_code)
     else:
@@ -278,8 +318,11 @@ def load_release(backend: str = "auto", *, release: str | None = None, model_dir
     if backend == "torch":
         device = device or os.environ.get("JEV_STYLE_DEVICE") or os.environ.get("JEV_DEVICE") or None
         kw = {}
-        if "cuda_graphs" in inspect.signature(cls).parameters:
-            kw["cuda_graphs"] = _want_cuda_graphs(cuda_graphs, device)
+        param = inspect.signature(cls).parameters.get("cuda_graphs")
+        if param is not None:
+            want = _want_cuda_graphs(cuda_graphs, device, runtime_decides=param.default is None)
+            if want is not None:
+                kw["cuda_graphs"] = want
         elif cuda_graphs:
             raise ValueError(f"the {build.repo} runtime at this revision has no CUDA-graph path (cuda_graphs=True)")
         runtime = cls(folder, device=device, dtype=dtype, verify=verify, **kw)
@@ -290,13 +333,16 @@ def load_release(backend: str = "auto", *, release: str | None = None, model_dir
     return runtime, rt, build
 
 
-def _want_cuda_graphs(flag: bool | None, device: str | None) -> bool:
+def _want_cuda_graphs(flag: bool | None, device: str | None, runtime_decides: bool = False) -> bool | None:
+    """cuda_graphs= for the runtime; None = leave it to the runtime's own default (``runtime_decides``)."""
     if flag is None:
         env = os.environ.get("JEV_STYLE_CUDA_GRAPHS", "").strip().lower()
-        if env:
+        if env and env != "auto":
             flag = env not in ("0", "false", "no", "off")
     if flag is not None:
         return bool(flag)
+    if runtime_decides:                             # 2B v4: on for bfloat16 on CUDA; in float32 they gain little
+        return None
     if device:
         return str(device).split(":", 1)[0] == "cuda"
     import torch

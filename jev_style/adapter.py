@@ -16,6 +16,7 @@ TypeSafe's API; nothing is truncated.
 """
 from __future__ import annotations
 
+import inspect
 import math
 import threading
 import time
@@ -82,6 +83,15 @@ class Adapter:
         return f"{self._backend}-{dev}" if dev else self._backend
 
     @property
+    def supports_images(self) -> bool:
+        """The runtime reads images: its ``decide_many`` takes ``images=`` (2B v4 and later)."""
+        fn = getattr(self.runtime, "decide_many", None)
+        try:
+            return fn is not None and "images" in inspect.signature(fn).parameters
+        except (TypeError, ValueError):
+            return False
+
+    @property
     def max_len(self) -> int:
         return int(getattr(getattr(self.runtime, "renderer", None), "max_len", 25_600))
 
@@ -89,19 +99,30 @@ class Adapter:
     def head_max(self) -> int:
         return int(getattr(getattr(self.runtime, "renderer", None), "head_max", 2_048))
 
-    def systemone(self, body: Any) -> dict:
+    def systemone(self, body: Any, *, parts: dict | None = None, image_header: bool = False) -> dict:
+        """``parts`` / ``image_header``: a multipart request's image parts and whether it sent
+        ``TypeSafe-Danger-Zone-Images: true`` (see ``assets``); images reach the runtime as ``images=``."""
         t0 = time.perf_counter()
-        parsed = body if isinstance(body, ParsedRequest) else parse_request(body)
+        parsed = body if isinstance(body, ParsedRequest) else parse_request(
+            body, images_ok=self.supports_images, parts=parts, image_header=image_header)
         budget = getattr(self.rt, "InputBudgetError", ())
         qerr = getattr(self.rt, "QuestionError", ())
+        kw = {"category": self.category}
+        if parsed.images:
+            kw["images"] = parsed.images
         with self._lock:
             try:
                 results = self.worker.submit(self.runtime.decide_many, parsed.state,
-                                             [q.internal for q in parsed.questions], category=self.category).result()
+                                             [q.internal for q in parsed.questions], **kw).result()
             except budget as e:
-                raise ApiError(400, "max_tokens_exceeded", f"{e} (nothing truncated)") from None
+                what = "images and text together exceed the context length: " if parsed.images else ""
+                raise ApiError(400, "max_tokens_exceeded", f"{what}{e} (nothing truncated)") from None
             except qerr as e:
                 raise ApiError(422, "invalid_question", str(e)) from None
+            except (OSError, ValueError) as e:
+                if not parsed.images:
+                    raise
+                raise ApiError(400, "invalid_image", f"the model could not read an image: {e}") from None
         total_ms = (time.perf_counter() - t0) * 1000
         answers = {q.id: self._answer(q, r) for q, r in zip(parsed.questions, results)}
         head = sum(int(r.get("head_tokens", 0)) for r in results)
@@ -126,7 +147,7 @@ class Adapter:
 
     def models(self) -> dict:
         entry = {"id": self.model_id, "context_tokens": self.max_len, "head_max_tokens": self.head_max,
-                 "backend": self.backend}
+                 "backend": self.backend, "images": self.supports_images, "box": False}
         return {"object": "list", "data": [entry],
                 # the shape the public systemone SDKs read from GET /v1/models; they require release_date to be a
                 # string ("" for the fake engine / unpinned builds)
