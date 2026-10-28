@@ -1,0 +1,27 @@
+name: Bug or model-quality report
+description: Report an installation failure, incorrect behavior, or a labelled decision failure.
+body:
+  - type: markdown
+    attributes:
+      value: Remove credentials and private data. Include the smallest example you can share.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Package version, model release, backend, OS, Python version, and hardware.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Exact command or minimal code, plus a shareable input.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual result
+      description: Include the error or returned probabilities. For quality reports, explain the expected label.
+    validations:
+      required: true

@@ -1,0 +1,10 @@
+# Gradio is installed by the Space from README.md (sdk_version). torch 2.13.0 is the version the v3 Spaces run on
+# ZeroGPU (the model repo's runtime was tested with torch 2.14.1 / torchvision 0.29.1; 0.28.0 is torch 2.13's pair).
+# torchvision is needed: the runtime loads the Qwen3.5 image processor at start-up.
+torch==2.13.0
+torchvision==0.28.0
+transformers==5.17.0
+tokenizers==0.23.3
+numpy==2.5.3
+huggingface_hub==1.32.0
+spaces

@@ -3,6 +3,20 @@
 Versions follow [semantic versioning](https://semver.org/). Each release pins the model revisions it loads
 (`jev_style/models.py`), so upgrading the package is what changes the weights you get.
 
+## 0.6.1 (2026-10-28)
+
+- Start with the live demo or a short local setup. The README now puts installation,
+  model selection and runnable recipes ahead of benchmark details, and fixes a broken
+  code fence. Package metadata links to the current v4 model collection.
+- Add complete support-ticket, confidence-based fallback and receipt-review recipes,
+  with synthetic sample inputs and transport/routing tests.
+- Add a Semantic Router 1.1.1 integration example using a local systemone endpoint.
+- Add contribution guidance and issue templates for reproducible quality reports and
+  real application use cases.
+- Preserve the 0.8B Space source and include the current 2B v4 Space source separately.
+  The 2B demo offers task-based examples and visible copyable local code.
+- Model revisions and inference behavior match 0.6.0.
+
 ## 0.6.0 (2026-10-28)
 
 - **Jev-Style-2B-Decision-v4** (`--release 2b-v4`), all three builds pinned: torch @ c9504148, MLX @ a14bbe4d,

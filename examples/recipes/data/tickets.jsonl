@@ -1,0 +1,12 @@
+{"id":"billing-1","text":"My card was charged twice for the same order. Please remove the duplicate payment.","expected_team":"billing"}
+{"id":"billing-2","text":"The checkout says payment declined, but my bank shows a pending charge.","expected_team":"billing"}
+{"id":"billing-3","text":"Please send an invoice for last month's subscription payment.","expected_team":"billing"}
+{"id":"billing-4","text":"I updated my credit card but the monthly payment still failed.","expected_team":"billing"}
+{"id":"shipping-1","text":"My parcel has not arrived and the tracking page has not changed for five days.","expected_team":"shipping"}
+{"id":"shipping-2","text":"When will order 123 be delivered? I need its tracking number.","expected_team":"shipping"}
+{"id":"shipping-3","text":"The courier marked my parcel delivered, but it is not at my door.","expected_team":"shipping"}
+{"id":"shipping-4","text":"Can you check why my shipment is delayed at the sorting centre?","expected_team":"shipping"}
+{"id":"returns-1","text":"The shoes arrived in the wrong size. How do I exchange them?","expected_team":"returns"}
+{"id":"returns-2","text":"The mug arrived broken. I would like to return it for a refund.","expected_team":"returns"}
+{"id":"returns-3","text":"I ordered a blue shirt and received a red one. Please arrange a return.","expected_team":"returns"}
+{"id":"returns-4","text":"The replacement jacket still does not fit. Can I send it back?","expected_team":"returns"}

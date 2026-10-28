@@ -1,12 +1,12 @@
 [project]
 name = "jev-style"
 dynamic = ["version"]
-description = "Small, calibrated decision models you run on your own machine, with a systemone-compatible API, a Claude Code guard, an MCP server and agent skills."
+description = "Local classification and routing for AI agents, with calibrated probabilities, a systemone-compatible API, MCP tools and a Claude Code guard."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
 authors = [{ name = "chaoliangUNSW" }]
-keywords = ["decision-model", "jev", "classification", "calibration", "mlx", "gguf", "mcp", "claude-code", "agent-skills"]
+keywords = ["decision-model", "jev", "classification", "text-classification", "llm-routing", "calibration", "mlx", "gguf", "mcp", "claude-code", "agent-skills"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
@@ -45,7 +45,7 @@ Homepage = "https://jevstyle.com"
 Repository = "https://github.com/lawrence3699/jev-style"
 Changelog = "https://github.com/lawrence3699/jev-style/blob/main/CHANGELOG.md"
 Issues = "https://github.com/lawrence3699/jev-style/issues"
-Models = "https://huggingface.co/collections/chaoliangUNSW/jev-style-decision-v3-08b-2b-6ab87f32380cbd8c03b608b9"
+Models = "https://huggingface.co/collections/chaoliangUNSW/jev-style-decision-v4-2b"
 
 [build-system]
 requires = ["hatchling"]
