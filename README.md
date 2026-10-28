@@ -2,7 +2,7 @@
 
 <!-- mcp-name: io.github.lawrence3699/jev-style -->
 
-Local classification and routing for AI agents, with a probability for every answer. Run small models on your own machine to route support tickets, decide when to call a larger model, and review receipts or screenshots.
+JevStyle is an open-source toolkit for running small decision models locally. Classify text, route requests, and score defined options with probabilities for each answer. Use it to route support tickets, decide when to call a larger model, and review receipts or screenshots with the image-capable build.
 
 <p>
   <a href="https://pypi.org/project/jev-style/"><img alt="PyPI" src="https://img.shields.io/pypi/v/jev-style?style=for-the-badge&labelColor=000000&color=0a0a0a" height="28"></a>
@@ -16,6 +16,17 @@ Local classification and routing for AI agents, with a probability for every ans
 **[Try text and images online](https://huggingface.co/spaces/chaoliangUNSW/jev-style-2b)** · **[Run locally](#quick-start)** · **[Copy a working recipe](#recipes)** · **[Website](https://jevstyle.com/?utm_source=github&utm_medium=readme&utm_campaign=start_here)**
 
 Give the model text or JSON, optional images, and typed questions. It returns yes/no probabilities, a distribution over choices, or a rating. Your application decides when to accept the result and when to ask a person or another model.
+
+### Guides and evaluation evidence
+
+| Start here | What it covers |
+|---|---|
+| [Compare local models](https://jevstyle.com/models/compare/?utm_source=github&utm_medium=readme&utm_campaign=guides) | Choose a model and backend for your inputs and hardware. |
+| [Published benchmarks](https://jevstyle.com/benchmarks/?utm_source=github&utm_medium=readme&utm_campaign=guides) | Results with their evaluation scope, protocols, and limitations. |
+| [Local classification and routing](https://jevstyle.com/use-cases/local-llm-routing/?utm_source=github&utm_medium=readme&utm_campaign=guides) | Score defined routes and keep a fallback for uncertain decisions. |
+| [Support ticket classification](https://jevstyle.com/use-cases/support-ticket-classification/?utm_source=github&utm_medium=readme&utm_campaign=guides) | Classify a team, refund request, and urgency in one local call. |
+| [Claude Code tool-call guard](https://jevstyle.com/guides/claude-code-guard/?utm_source=github&utm_medium=readme&utm_campaign=guides) | Set up a local review signal alongside existing execution controls. |
+| [About JevStyle](https://jevstyle.com/about/?utm_source=github&utm_medium=readme&utm_campaign=guides) | Project identity, maintenance, licensing, and independent status. |
 
 ![The Playground answering a support-ticket request, then the agent-approval demo allowing, asking about and denying tool calls](https://raw.githubusercontent.com/lawrence3699/jev-style/main/docs/demo.gif)
 

@@ -1,7 +1,7 @@
 [project]
 name = "jev-style"
 dynamic = ["version"]
-description = "Local classification and routing for AI agents, with calibrated probabilities, a systemone-compatible API, MCP tools and a Claude Code guard."
+description = "Local classification, routing, and scoring for AI agents, with option probabilities, a systemone-compatible API, MCP tools and a Claude Code guard."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
