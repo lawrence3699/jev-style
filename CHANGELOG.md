@@ -3,6 +3,14 @@
 Versions follow [semantic versioning](https://semver.org/). Each release pins the model revisions it loads
 (`jev_style/models.py`), so upgrading the package is what changes the weights you get.
 
+## 0.6.2 (2026-10-29)
+
+- Synchronize the PyPI description with the project’s local classification, routing,
+  and scoring positioning, and link directly to model selection, benchmark protocols,
+  runnable application guides, and project information on jevstyle.com.
+- Documentation and package metadata only. Runtime behavior, dependencies, model
+  revisions, and weights are unchanged from 0.6.1.
+
 ## 0.6.1 (2026-10-28)
 
 - Start with the live demo or a short local setup. The README now puts installation,

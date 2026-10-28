@@ -1,5 +1,5 @@
 """Jev-Style: small, calibrated, local decision models with a systemone-compatible API."""
-__version__ = "0.6.1"
+__version__ = "0.6.2"
 
 from .client import JevStyle, JevStyleError, choice, classify, configure, decide, image, noul, score  # noqa: E402
 
