@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "purpose": "Saved, real model outputs for the three fixed demo examples; no new inference was requested to obtain these records.",
+  "retrieved_at_utc": "2026-10-28T05:56:25.671552+00:00",
+  "source_method": "HTTP GET of Gradio cache indices.csv and log.csv; HTTP GET of the already-served receipt image. No calls to decide, decide_many or load_example.",
+  "ui_requirements": [
+    "Label these outputs as saved example results, not a fresh live run.",
+    "Only show a saved result for its exact corresponding state, question, answer kind, options and image. Clear or hide it when inputs change.",
+    "Display metadata_from_recorded_run only as historical model timing, never current request latency.",
+    "The agent example is an option-probability prediction, not an execution authorization or a safety guarantee."
+  ],
+  "examples": [
+    {
+      "id": "support_ticket",
+      "task_label": "Route a support ticket",
+      "input": {
+        "state_text": "I was charged twice for my subscription this month.",
+        "question": "Which team should handle this ticket?",
+        "answer_kind": "Choice",
+        "options_text": "billing: payments, invoices, refunds\ntechnical: bugs and outages\nsales: new purchases",
+        "image": null
+      },
+      "output": {
+        "label": "billing",
+        "probabilities": {
+          "billing": 0.9950370005164644,
+          "technical": 0.0027610873107771507,
+          "sales": 0.0022019121727584142
+        },
+        "metadata_from_recorded_run": "1,848 ms model run (queue/network extra) · 14 state tokens · 44 question tokens · ZeroGPU",
+        "python_code_from_recorded_run": "import sys\nfrom huggingface_hub import snapshot_download\n\npath = snapshot_download(\"chaoliangUNSW/Jev-Style-2B-Decision-v4\")\nsys.path.insert(0, path)\nfrom jev_style_decision import JevStyleDecision\n\nm = JevStyleDecision(path)                     # float32; CUDA, Apple MPS or CPU\nr = m.decide(\"I was charged twice for my subscription this month.\", \n             \"Which team should handle this ticket?\", \n             options={\"billing\": \"payments, invoices, refunds\", \"technical\": \"bugs and outages\", \"sales\": \"new purchases\"})\nprint(r[\"answer\"], r[\"probabilities\"])"
+      },
+      "gradio_outputs": [
+        {
+          "label": "billing",
+          "confidences": [
+            {
+              "label": "billing",
+              "confidence": 0.9950370005164644
+            },
+            {
+              "label": "technical",
+              "confidence": 0.0027610873107771507
+            },
+            {
+              "label": "sales",
+              "confidence": 0.0022019121727584142
+            }
+          ]
+        },
+        "1,848 ms model run (queue/network extra) · 14 state tokens · 44 question tokens · ZeroGPU",
+        "import sys\nfrom huggingface_hub import snapshot_download\n\npath = snapshot_download(\"chaoliangUNSW/Jev-Style-2B-Decision-v4\")\nsys.path.insert(0, path)\nfrom jev_style_decision import JevStyleDecision\n\nm = JevStyleDecision(path)                     # float32; CUDA, Apple MPS or CPU\nr = m.decide(\"I was charged twice for my subscription this month.\", \n             \"Which team should handle this ticket?\", \n             options={\"billing\": \"payments, invoices, refunds\", \"technical\": \"bugs and outages\", \"sales\": \"new purchases\"})\nprint(r[\"answer\"], r[\"probabilities\"])"
+      ],
+      "model": {
+        "repo_id": "chaoliangUNSW/Jev-Style-2B-Decision-v4",
+        "revision": "c9504148dae7f7a43d67a5782f12a015a4b4022c",
+        "backend": "PyTorch",
+        "compute_dtype": "float32",
+        "host": "Hugging Face ZeroGPU",
+        "provenance": "REPO/REVISION and runtime construction in the pinned Space app.py"
+      },
+      "evidence": {
+        "source": "existing_gradio_eager_cache",
+        "space_repo": "chaoliangUNSW/jev-style-2b",
+        "space_commit": "fc1518ee0a0025efe14906938f0f271d3140aff8",
+        "space_runtime_commit": "fc1518ee0a0025efe14906938f0f271d3140aff8",
+        "dataset_id": 22,
+        "example_index": 0,
+        "cache_data_row_index": 0,
+        "csv_record_number_including_header": 2,
+        "cache_csv_url": "https://chaoliangunsw-jev-style-2b.hf.space/gradio_api/file=.gradio/cached_examples/22/log.csv",
+        "cache_indices_url": "https://chaoliangunsw-jev-style-2b.hf.space/gradio_api/file=.gradio/cached_examples/22/indices.csv",
+        "cache_csv_sha256": "32a3f8b477d4e68f1220a8bd7fc4ed9ba865e11abd0cc42bbe4a248f36fe087c",
+        "cache_indices_sha256": "7427877c40fb0361401248f9c96abe6117396bc6ab16811b5b1706274c02443e",
+        "cache_timestamp_raw": "2026-10-28 06:45:21.652860",
+        "cache_timestamp_timezone": null,
+        "timestamp_note": "Gradio CSV does not encode a timezone. Preserve this timestamp as reported; do not label it UTC.",
+        "retrieved_at_utc": "2026-10-28T05:56:25.671552+00:00",
+        "archived_csv": "recordings/log.csv",
+        "archived_indices": "recordings/indices.csv"
+      }
+    },
+    {
+      "id": "agent_command",
+      "task_label": "Review an agent command",
+      "input": {
+        "state_text": "git push --force origin main",
+        "question": "Should a coding agent run this shell command?",
+        "answer_kind": "Choice",
+        "options_text": "allow: read-only or easily undone\nask: changes shared state, check with the user first\ndeny: destructive or irreversible",
+        "image": null
+      },
+      "output": {
+        "label": "deny",
+        "probabilities": {
+          "deny": 0.6986519758804096,
+          "ask": 0.25613212568786325,
+          "allow": 0.04521589843172709
+        },
+        "metadata_from_recorded_run": "46 ms model run (queue/network extra) · 10 state tokens · 52 question tokens · ZeroGPU",
+        "python_code_from_recorded_run": "import sys\nfrom huggingface_hub import snapshot_download\n\npath = snapshot_download(\"chaoliangUNSW/Jev-Style-2B-Decision-v4\")\nsys.path.insert(0, path)\nfrom jev_style_decision import JevStyleDecision\n\nm = JevStyleDecision(path)                     # float32; CUDA, Apple MPS or CPU\nr = m.decide(\"git push --force origin main\", \n             \"Should a coding agent run this shell command?\", \n             options={\"allow\": \"read-only or easily undone\", \"ask\": \"changes shared state, check with the user first\", \"deny\": \"destructive or irreversible\"})\nprint(r[\"answer\"], r[\"probabilities\"])"
+      },
+      "gradio_outputs": [
+        {
+          "label": "deny",
+          "confidences": [
+            {
+              "label": "deny",
+              "confidence": 0.6986519758804096
+            },
+            {
+              "label": "ask",
+              "confidence": 0.25613212568786325
+            },
+            {
+              "label": "allow",
+              "confidence": 0.04521589843172709
+            }
+          ]
+        },
+        "46 ms model run (queue/network extra) · 10 state tokens · 52 question tokens · ZeroGPU",
+        "import sys\nfrom huggingface_hub import snapshot_download\n\npath = snapshot_download(\"chaoliangUNSW/Jev-Style-2B-Decision-v4\")\nsys.path.insert(0, path)\nfrom jev_style_decision import JevStyleDecision\n\nm = JevStyleDecision(path)                     # float32; CUDA, Apple MPS or CPU\nr = m.decide(\"git push --force origin main\", \n             \"Should a coding agent run this shell command?\", \n             options={\"allow\": \"read-only or easily undone\", \"ask\": \"changes shared state, check with the user first\", \"deny\": \"destructive or irreversible\"})\nprint(r[\"answer\"], r[\"probabilities\"])"
+      ],
+      "model": {
+        "repo_id": "chaoliangUNSW/Jev-Style-2B-Decision-v4",
+        "revision": "c9504148dae7f7a43d67a5782f12a015a4b4022c",
+        "backend": "PyTorch",
+        "compute_dtype": "float32",
+        "host": "Hugging Face ZeroGPU",
+        "provenance": "REPO/REVISION and runtime construction in the pinned Space app.py"
+      },
+      "evidence": {
+        "source": "existing_gradio_eager_cache",
+        "space_repo": "chaoliangUNSW/jev-style-2b",
+        "space_commit": "fc1518ee0a0025efe14906938f0f271d3140aff8",
+        "space_runtime_commit": "fc1518ee0a0025efe14906938f0f271d3140aff8",
+        "dataset_id": 22,
+        "example_index": 5,
+        "cache_data_row_index": 5,
+        "csv_record_number_including_header": 7,
+        "cache_csv_url": "https://chaoliangunsw-jev-style-2b.hf.space/gradio_api/file=.gradio/cached_examples/22/log.csv",
+        "cache_indices_url": "https://chaoliangunsw-jev-style-2b.hf.space/gradio_api/file=.gradio/cached_examples/22/indices.csv",
+        "cache_csv_sha256": "32a3f8b477d4e68f1220a8bd7fc4ed9ba865e11abd0cc42bbe4a248f36fe087c",
+        "cache_indices_sha256": "7427877c40fb0361401248f9c96abe6117396bc6ab16811b5b1706274c02443e",
+        "cache_timestamp_raw": "2026-10-28 06:45:23.936640",
+        "cache_timestamp_timezone": null,
+        "timestamp_note": "Gradio CSV does not encode a timezone. Preserve this timestamp as reported; do not label it UTC.",
+        "retrieved_at_utc": "2026-10-28T05:56:25.671552+00:00",
+        "archived_csv": "recordings/log.csv",
+        "archived_indices": "recordings/indices.csv"
+      }
+    },
+    {
+      "id": "receipt_approval",
+      "task_label": "Check a receipt",
+      "input": {
+        "state_text": "{\n \"receipt\": \"<|image_1|>\",\n \"policy\": \"Meals over 50 EUR need a manager approval.\"\n}",
+        "question": "Does this receipt need a manager approval?",
+        "answer_kind": "Yes / No",
+        "options_text": "",
+        "image": {
+          "path": "examples/receipt.png",
+          "packaged_evidence_path": "receipt.png",
+          "sha256": "413476173ea3a6e8d514bba7d2c4317e225b6b12a610c66fe02e29e8c4963c05",
+          "mime_type": "image/png",
+          "byte_length": 18329,
+          "source_url": "https://chaoliangunsw-jev-style-2b.hf.space/gradio_api/file=/tmp/gradio/9679f5078a1a67c32ba5ede1e8ac0cecf291ff0fc25e20be18704a475abe2d39/receipt.png",
+          "pinned_source_url": "https://huggingface.co/spaces/chaoliangUNSW/jev-style-2b/resolve/fc1518ee0a0025efe14906938f0f271d3140aff8/examples/receipt.png",
+          "matches_pinned_space_file": true
+        }
+      },
+      "output": {
+        "label": "Yes",
+        "probabilities": {
+          "Yes": 0.8841186852988975,
+          "No": 0.11588131470110254
+        },
+        "metadata_from_recorded_run": "1,054 ms model run (queue/network extra) · 468 state tokens (440 of them for the image) · 41 question tokens · ZeroGPU",
+        "python_code_from_recorded_run": "import sys\nfrom huggingface_hub import snapshot_download\n\npath = snapshot_download(\"chaoliangUNSW/Jev-Style-2B-Decision-v4\")\nsys.path.insert(0, path)\nfrom jev_style_decision import JevStyleDecision\n\nm = JevStyleDecision(path)                     # float32; CUDA, Apple MPS or CPU\nr = m.decide({\"receipt\": \"<|image_1|>\", \"policy\": \"Meals over 50 EUR need a manager approval.\"}, \n             \"Does this receipt need a manager approval?\", \n             qtype=\"noul\", \n             images=[\"image.png\"])\nprint(r[\"answer\"], r[\"probabilities\"])"
+      },
+      "gradio_outputs": [
+        {
+          "label": "Yes",
+          "confidences": [
+            {
+              "label": "Yes",
+              "confidence": 0.8841186852988975
+            },
+            {
+              "label": "No",
+              "confidence": 0.11588131470110254
+            }
+          ]
+        },
+        "1,054 ms model run (queue/network extra) · 468 state tokens (440 of them for the image) · 41 question tokens · ZeroGPU",
+        "import sys\nfrom huggingface_hub import snapshot_download\n\npath = snapshot_download(\"chaoliangUNSW/Jev-Style-2B-Decision-v4\")\nsys.path.insert(0, path)\nfrom jev_style_decision import JevStyleDecision\n\nm = JevStyleDecision(path)                     # float32; CUDA, Apple MPS or CPU\nr = m.decide({\"receipt\": \"<|image_1|>\", \"policy\": \"Meals over 50 EUR need a manager approval.\"}, \n             \"Does this receipt need a manager approval?\", \n             qtype=\"noul\", \n             images=[\"image.png\"])\nprint(r[\"answer\"], r[\"probabilities\"])"
+      ],
+      "model": {
+        "repo_id": "chaoliangUNSW/Jev-Style-2B-Decision-v4",
+        "revision": "c9504148dae7f7a43d67a5782f12a015a4b4022c",
+        "backend": "PyTorch",
+        "compute_dtype": "float32",
+        "host": "Hugging Face ZeroGPU",
+        "provenance": "REPO/REVISION and runtime construction in the pinned Space app.py"
+      },
+      "evidence": {
+        "source": "existing_gradio_eager_cache",
+        "space_repo": "chaoliangUNSW/jev-style-2b",
+        "space_commit": "fc1518ee0a0025efe14906938f0f271d3140aff8",
+        "space_runtime_commit": "fc1518ee0a0025efe14906938f0f271d3140aff8",
+        "dataset_id": 22,
+        "example_index": 1,
+        "cache_data_row_index": 1,
+        "csv_record_number_including_header": 3,
+        "cache_csv_url": "https://chaoliangunsw-jev-style-2b.hf.space/gradio_api/file=.gradio/cached_examples/22/log.csv",
+        "cache_indices_url": "https://chaoliangunsw-jev-style-2b.hf.space/gradio_api/file=.gradio/cached_examples/22/indices.csv",
+        "cache_csv_sha256": "32a3f8b477d4e68f1220a8bd7fc4ed9ba865e11abd0cc42bbe4a248f36fe087c",
+        "cache_indices_sha256": "7427877c40fb0361401248f9c96abe6117396bc6ab16811b5b1706274c02443e",
+        "cache_timestamp_raw": "2026-10-28 06:45:22.903908",
+        "cache_timestamp_timezone": null,
+        "timestamp_note": "Gradio CSV does not encode a timezone. Preserve this timestamp as reported; do not label it UTC.",
+        "retrieved_at_utc": "2026-10-28T05:56:25.671552+00:00",
+        "archived_csv": "recordings/log.csv",
+        "archived_indices": "recordings/indices.csv"
+      }
+    }
+  ]
+}

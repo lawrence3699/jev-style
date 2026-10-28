@@ -28,8 +28,18 @@ from contextlib import nullcontext  # noqa: E402
 from pathlib import Path  # noqa: E402
 
 import gradio as gr  # noqa: E402
-import torch  # noqa: E402
+import html  # noqa: E402
+import logging  # noqa: E402
+
+PREVIEW_MODE = os.environ.get("JEV_DEMO_PREVIEW") == "1"
+if not PREVIEW_MODE:
+    import torch  # noqa: E402
 from huggingface_hub import snapshot_download  # noqa: E402
+from recovery import classify_error, local_commands, sdk_example, SnippetInputError, normalize_questions
+from saved_ui import render_saved_examples
+from ui_styles import CSS, make_theme
+
+LOG = logging.getLogger("jevstyle.demo")
 
 HERE = Path(__file__).resolve().parent
 HF = "https://huggingface.co/"
@@ -68,24 +78,30 @@ def pick_device() -> str:
     return "cpu"
 
 
-DEVICE = pick_device()
-if os.environ.get("JEV_MODEL_DIR"):
-    MODEL_DIR = os.environ["JEV_MODEL_DIR"]
-else:
-    MODEL_DIR = snapshot_download(REPO, revision=REVISION, allow_patterns=FILES)
-sys.path.insert(0, str(MODEL_DIR))
-import jev_style_decision as rt  # noqa: E402  (the model repo's runtime, same commit as the weights)
+# Keep ZeroGPU's required model placement at module level. If the model cannot
+# initialize, the page still serves its clearly labelled saved examples.
+DEVICE = "preview" if PREVIEW_MODE else pick_device()
+MODEL = None
+rt = None
+MODEL_ERROR = None
+INPUT_ERRORS = (ValueError, SnippetInputError)
+if not PREVIEW_MODE:
+    try:
+        MODEL_DIR = os.environ.get("JEV_MODEL_DIR") or snapshot_download(
+            REPO, revision=REVISION, allow_patterns=FILES)
+        sys.path.insert(0, str(MODEL_DIR))
+        import jev_style_decision as rt
+        INPUT_ERRORS = (ValueError, SnippetInputError, rt.InputBudgetError, rt.QuestionError)
+        _t0 = time.perf_counter()
+        _check = rt.verify_manifest(MODEL_DIR, only=FILES)
+        if not _check["ok"]:
+            raise RuntimeError("Model file verification failed")
+        MODEL = rt.JevStyleDecision(MODEL_DIR, device=DEVICE, dtype="float32", cuda_graphs=False)
+        print(f"{REPO}@{REVISION[:7]} loaded on {DEVICE} in {time.perf_counter()-_t0:.1f} s", flush=True)
+    except Exception as error:
+        MODEL_ERROR = error
+        LOG.exception("Live model initialization failed; serving saved examples")
 
-_t0 = time.perf_counter()
-_check = rt.verify_manifest(MODEL_DIR, only=FILES)    # sha256 of every file used here, from the repo's manifest.json
-if not _check["ok"]:
-    raise RuntimeError(f"integrity check failed: {_check}")
-# float32, the reference precision. CUDA graphs stay off (they are recorded per process at load, and ZeroGPU calls
-# may land on another GPU); the shared-state fast path for several text questions is on by default on CUDA.
-MODEL = rt.JevStyleDecision(MODEL_DIR, device=DEVICE, dtype="float32", cuda_graphs=False)
-SOURCE = os.environ["JEV_MODEL_DIR"] if os.environ.get("JEV_MODEL_DIR") else f"{REPO}@{REVISION[:7]}"
-print(f"{SOURCE} loaded on {DEVICE} in {time.perf_counter() - _t0:.1f} s (float32, "
-      f"{_check['checked']} files verified)", flush=True)
 
 KINDS = ["Choice", "Yes / No", "Score"]
 OPTION_LABEL = {"Choice": "Options · one per line · name: description (optional)",
@@ -131,7 +147,8 @@ def parse_questions(src: str) -> list:
         raise ValueError('Questions must be a non-empty JSON list of {"t", "ins", "crit"} objects.')
     if len(qs) > MAX_QUESTIONS:
         raise ValueError(f"At most {MAX_QUESTIONS} questions per call in this demo.")
-    return [rt.make_question(q) for q in qs]
+    normalize_questions(qs)
+    return [rt.make_question(q) for q in qs] if rt is not None else qs
 
 
 def image_list(image) -> list:
@@ -161,6 +178,8 @@ MODEL_LOCK = nullcontext() if ON_ZEROGPU else threading.RLock()
 
 def count(state, qs: list, images: list) -> dict:
     """Render every question on CPU (raises InputBudgetError / QuestionError); token counts for one call."""
+    if MODEL is None:
+        raise RuntimeError("Live model is unavailable")
     with MODEL_LOCK:                                   # the tokenizer is shared with score() (see MODEL_LOCK)
         _, meta, info = MODEL._rows(state, qs, images, None)
     return {"state": meta[0]["state_tokens"], "heads": sum(m["input_tokens"] - m["state_tokens"] for m in meta),
@@ -272,7 +291,8 @@ def snippet(text: str, value, qs: list, images: list) -> str:
 
 
 def refuse(e: Exception):
-    raise gr.Error(str(e)) from None
+    LOG.warning("Request validation failed: %s", type(e).__name__)
+    raise gr.Error(classify_error(e, input_error=True).as_markdown()) from None
 
 
 def decide(text: str, question: str, kind: str, options: str, image=None):
@@ -284,9 +304,13 @@ def decide(text: str, question: str, kind: str, options: str, image=None):
         q, names = build(question or "", kind, options)
         c = count(state, [q], images)
         check_duration(c)
-    except (ValueError, rt.InputBudgetError, rt.QuestionError) as e:
+    except INPUT_ERRORS as e:
         refuse(e)
-    res, ms = score(state, [q], images)
+    try:
+        res, ms = score(state, [q], images)
+    except Exception as error:
+        LOG.exception("API decision failed")
+        raise gr.Error(classify_error(error).as_markdown()) from None
     probs = {names[k]: float(v) for k, v in res[0]["probabilities"].items()}
     return probs, meta_line(c, ms), snippet(text or "", state, [q], images)
 
@@ -308,9 +332,13 @@ def decide_several(text: str, questions: str, image=None):
         qs = parse_questions(questions)
         c = count(state, qs, images)
         check_duration(c)
-    except (ValueError, rt.InputBudgetError, rt.QuestionError) as e:
+    except INPUT_ERRORS as e:
         refuse(e)
-    res, ms = score(state, qs, images)
+    try:
+        res, ms = score(state, qs, images)
+    except Exception as error:
+        LOG.exception("API decisions failed")
+        raise gr.Error(classify_error(error).as_markdown()) from None
     rows = ["| # | Question | Answer | Probabilities |", "|---|---|---|---|"]
     for i, (q, r) in enumerate(zip(qs, res), 1):
         top = sorted(r["probabilities"].items(), key=lambda kv: -kv[1])[:3]
@@ -452,97 +480,304 @@ QHELP = ('JSON list of questions about the state. Each: {"t": "choice", "ins": q
          f'"crit": [levels, lowest first]}}. Up to {MAX_QUESTIONS} here.')
 
 
-def examples(rows: list, inputs: list, outputs: list, fn) -> None:
-    """Short examples are cached at startup; the ~19K-token ones only after their first click (lazy), so building
-    the Space never spends ZeroGPU time on the long runs, and a long run happens only when someone asks for it."""
-    short = [e for e in rows if e[1] is not DOC]
-    long = [e for e in rows if e[1] is DOC]
-    gr.Examples([list(e[1:]) for e in short], inputs, outputs, fn, example_labels=[e[0] for e in short],
-                cache_examples=True, cache_mode="eager", examples_per_page=len(short))
-    if long:
-        gr.Examples([list(e[1:]) for e in long], inputs, outputs, fn, example_labels=[e[0] for e in long],
-                    label="Long document (about 19K tokens; runs on first click, then cached)",
-                    cache_examples=True, cache_mode="lazy", examples_per_page=len(long))
+def examples(rows: list, inputs: list) -> None:
+    gr.Examples([list(e[1:]) for e in rows], inputs=inputs,
+                example_labels=[e[0] for e in rows], cache_examples=False,
+                examples_per_page=5, label="More inputs to explore · no automatic GPU run")
+
+# -- resilient UI; saved examples never flow into the live output components --
+TASK_IDS = {"Route a support ticket": "support_ticket", "Review an agent command": "agent_command",
+            "Check a receipt": "receipt_approval"}
 
 
-THEME = gr.themes.Default(primary_hue=gr.themes.colors.neutral, neutral_hue=gr.themes.colors.neutral,
-                          font=[gr.themes.GoogleFont("Figtree"), "ui-sans-serif", "system-ui", "sans-serif"],
-                          radius_size=gr.themes.sizes.radius_lg).set(
-    button_primary_background_fill="*neutral_900", button_primary_background_fill_hover="*neutral_700",
-    button_primary_text_color="white", button_primary_background_fill_dark="*neutral_100",
-    button_primary_background_fill_hover_dark="*neutral_300", button_primary_text_color_dark="*neutral_900")
-CSS = """
-.wrap-app { max-width: 1080px; margin: 0 auto; }
-.lede p { font-size: 1.05rem; margin: 0; opacity: .75; }
-.meta p, .foot p { font-size: .85rem; opacity: .65; margin: 0; }
-.many td, .many th { word-break: normal !important; overflow-wrap: normal !important; }
-.many td:nth-child(3) { white-space: nowrap; }
-"""
+def status_html(state: str, title: str, message: str) -> str:
+    labels = {"ready": "READY", "queued": "WAITING", "running": "LIVE REQUEST", "live": "LIVE RESULT",
+              "error": "NOT COMPLETED", "stale": "STOPPED", "preview": "PREVIEW"}
+    return (f'<div class="jev-status" data-state="{state}" role="status" aria-live="polite">'
+            f'<span class="jev-state-badge"><span class="jev-state-dot"></span>{labels.get(state, "STATUS")}</span>'
+            f'<div class="jev-status-body"><p class="jev-status-title">{html.escape(title)}</p>'
+            f'<p class="jev-status-description">{html.escape(message)}</p>'
+            '<p class="jev-wait-clock" data-wait-clock></p></div></div>')
 
-with gr.Blocks(title="Jev-Style · Ticket routing, agent checks and receipt decisions", analytics_enabled=False, elem_classes="wrap-app") as demo:
-    gr.Markdown("# Turn text and images into decisions")
-    gr.Markdown("Route a support ticket, review an agent command or check a receipt. "
-                "Jev-Style 2B v4 returns a probability for every option. No install or API key needed.",
-                elem_classes="lede")
-    gr.Markdown("[Run on your machine](https://github.com/lawrence3699/jev-style#quick-start) · "
-                "[Model and evaluations](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v4) · "
-                "[Project home](https://jevstyle.com/?utm_source=huggingface&utm_medium=space&utm_campaign=demo)")
+
+def ready_status() -> str:
+    if PREVIEW_MODE:
+        return status_html("preview", "Saved examples are ready", "Local UI preview: live inference is disabled.")
+    if MODEL is None:
+        return status_html("error", "Live model unavailable", "Saved examples and local setup below are still available.")
+    return status_html("ready", "Ready when you are", "Run your input live, or open a saved example below without using GPU quota.")
+
+
+def request_html(job) -> str:
+    value = job.get("text", "")
+    excerpt = value[:380] + ("…" if len(value) > 380 else "")
+    question = "Several questions" if job.get("multi") else job.get("question", "")
+    image_note = " · includes your selected image" if job.get("image") else ""
+    return ('<details class="submitted-request"><summary>Input submitted for this run' + image_note + '</summary>'
+            f'<p>{html.escape(question)}</p><pre>{html.escape(excerpt)}</pre></details>')
+
+
+def job_parts(job):
+    text = job.get("text") or ""
+    image = job.get("image")
+    if not text.strip() and not image:
+        raise ValueError("Paste text or add an image")
+    state = state_of(text)
+    if job.get("multi"):
+        qs = parse_questions(job["questions"])
+        names = None
+    else:
+        q, names = build(job.get("question") or "", job.get("kind"), job.get("options") or "")
+        qs = [q]
+    return text, state, qs, image_list(image), names
+
+
+def make_export(job):
+    _, state, qs, images, _ = job_parts(job)
+    return sdk_example(state, qs, has_image=bool(images))
+
+
+def error_outputs(job, error, *, input_error=False, code=""):
+    recovery = classify_error(error, input_error=input_error)
+    # Only a typed failure category reaches the browser. No raw exception text.
+    saved_id = TASK_IDS.get(job.get("task"), "support_ticket")
+    return ("" if job.get("multi") else {}, "", code,
+            status_html("error", recovery.title, "No live result was produced for this input."),
+            gr.update(value=recovery.as_markdown(), visible=True), request_html(job),
+            (render_saved_examples(saved_id, expand=True).replace('id="saved-','id="saved-many-') if job.get("multi") else render_saved_examples(saved_id, expand=True)), gr.update(interactive=True), gr.update(interactive=False))
+
+
+def prepare_job(job):
+    try:
+        code = make_export(job)
+    except INPUT_ERRORS as error:
+        return (job,) + error_outputs(job, error, input_error=True)
+    return (job, "" if job.get("multi") else {}, "", code,
+            status_html("queued", "Waiting to start", "Shared GPU availability varies. Saved examples and local setup stay available while you wait."),
+            gr.update(value="", visible=False), request_html(job),
+            (render_saved_examples().replace('id="saved-','id="saved-many-') if job.get("multi") else render_saved_examples(TASK_IDS.get(job.get("task"), "support_ticket"))),
+            gr.update(interactive=False), gr.update(interactive=True))
+
+
+def prepare_one(text, question, kind, options, image, task):
+    return prepare_job(dict(text=text or "", question=question, kind=kind, options=options,
+                            image=image, task=task, multi=False))
+
+
+def prepare_many(text, questions, image):
+    return prepare_job(dict(text=text or "", questions=questions, image=image, multi=True))
+
+
+def many_table(qs, results):
+    def cell(value):
+        return html.escape(str(value)).replace("|", "\\|").replace("\n", " ")
+    rows = ["| Question | Top option | Probability |", "|---|---|---|"]
+    for q, result in zip(qs, results):
+        label = _label(q, result["answer"])
+        probability = result["probabilities"][result["answer"]]
+        rows.append(f'| {cell(q["ins"])} | {cell(label)} | {probability:.3f} |')
+    return "\n".join(rows)
+
+
+def run_job(job):
+    code = ""
+    try:
+        text, state, qs, images, names = job_parts(job)
+        code = sdk_example(state, qs, has_image=bool(images))
+    except INPUT_ERRORS as error:
+        yield error_outputs(job, error, input_error=True)
+        return
+    if PREVIEW_MODE:
+        yield error_outputs(job, RuntimeError("Local preview disables live inference"), code=code)
+        return
+    yield ("" if job.get("multi") else {}, "", code,
+           status_html("running", "Waiting for your live result", "This may include a shared-GPU wait. You can stop waiting or use a saved example below."),
+           gr.update(value="", visible=False), request_html(job), gr.skip(),
+           gr.update(interactive=False), gr.update(interactive=True))
+    started = time.perf_counter()
+    try:
+        counts = count(state, qs, images)
+        check_duration(counts)
+    except INPUT_ERRORS as error:
+        yield error_outputs(job, error, input_error=True, code=code)
+        return
+    except Exception as error:
+        LOG.exception("Live input preparation failed")
+        yield error_outputs(job, error, code=code)
+        return
+    try:
+        results, milliseconds = score(state, qs, images)
+        output = (many_table(qs, results) if job.get("multi") else
+                  {names[k]: float(v) for k,v in results[0]["probabilities"].items()})
+        meta = meta_line(counts, milliseconds)
+        total = time.perf_counter() - started
+        yield (output, meta, code,
+               status_html("live", "Live result for your submitted input", f"Server request: {total:.2f} s. Browser queue and network time are additional."),
+               gr.update(value="", visible=False), request_html(job), gr.skip(),
+               gr.update(interactive=True), gr.update(interactive=False))
+    except Exception as error:
+        LOG.exception("Live decision failed")
+        yield error_outputs(job, error, code=code)
+
+
+def stopped(multi=False):
+    return ("" if multi else {}, "", status_html("stale", "Stopped waiting", "A queued request was cancelled. Work already running on the GPU may finish in the background."),
+            gr.update(value="", visible=False), gr.update(interactive=True), gr.update(interactive=False))
+
+
+def select_task(name):
+    if name not in TASKS:
+        fields = [gr.skip()] * 5
+        advanced = gr.update(open=True)
+        image_panel = gr.skip()
+        code = "# Edit your text and question, then choose Run live to prepare matching code."
+    else:
+        _, text, question, kind, options, image = EXAMPLES[TASKS[name]]
+        fields = [text, question, kind, gr.update(value=options, visible=kind != "Yes / No", label=OPTION_LABEL.get(kind,"")), image]
+        advanced = gr.update(open=False)
+        image_panel = gr.update(open=bool(image))
+        code = make_export(dict(text=text,question=question,kind=kind,options=options,image=image,multi=False))
+    return (*fields, {}, "", code, ready_status(), gr.update(value="", visible=False), "",
+            render_saved_examples(TASK_IDS.get(name,"support_ticket")), gr.update(interactive=True),
+            gr.update(interactive=False), advanced, image_panel)
+
+
+WAIT_JS = """() => {
+  const seen = new WeakSet();
+  function observe() {
+    document.querySelectorAll('.jev-status[data-state]').forEach(el => {
+      if (seen.has(el)) return;
+      seen.add(el);
+      if (!['queued','running'].includes(el.dataset.state)) return;
+      const start = Date.now();
+      const clock = el.querySelector('[data-wait-clock]');
+      const timer = setInterval(() => {
+        if (!el.isConnected) { clearInterval(timer); return; }
+        const seconds = Math.floor((Date.now() - start) / 1000);
+        clock.textContent = seconds < 30 ? `Waiting ${seconds}s` :
+          `Still waiting (${seconds}s). Saved examples and local setup below do not need the GPU queue.`;
+      }, 1000);
+    });
+  }
+  new MutationObserver(observe).observe(document.body, {subtree:true, childList:true});
+  observe();
+}"""
+
+THEME = make_theme(gr)
+INITIAL_JOB = dict(text=EXAMPLES[0][1],question=EXAMPLES[0][2],kind=EXAMPLES[0][3],options=EXAMPLES[0][4],image=None,multi=False)
+
+with gr.Blocks(title="JevStyle · Local decisions, live or saved", analytics_enabled=False, elem_id="jev-app") as demo:
+    gr.HTML('''<header id="jev-hero"><span class="jev-eyebrow">JEVSTYLE · OPEN DECISION MODELS</span>
+      <h1>One input. A clear set of choices.</h1>
+      <p>Route a ticket, review an agent command, or check a receipt. Try your input live, or explore saved examples instantly.</p>
+      <nav class="jev-toplinks"><a href="https://jevstyle.com/models/2b-v4/">2B v4 · model guide ↗</a>
+      <a href="https://github.com/lawrence3699/jev-style">GitHub ↗</a>
+      <a href="https://jevstyle.com/?utm_source=huggingface&utm_medium=space&utm_campaign=demo">Project home ↗</a></nav></header>''')
     with gr.Tab("Try a task"):
         task = gr.Radio(list(TASKS) + ["Use my own input"], value="Route a support ticket",
-                        label="1. Choose a task, then edit the example if you like")
-        with gr.Row(equal_height=False):
-            with gr.Column(scale=5):
-                text = gr.Textbox(label="Text or JSON state", lines=6, max_lines=12, max_length=200_000,
-                                  value=EXAMPLES[0][1])
-                image = gr.Image(label=IMAGE_LABEL, type="filepath", sources=["upload", "clipboard"], height=220)
-                question = gr.Textbox(label="Question", value=EXAMPLES[0][2], max_length=2_000)
-                kind = gr.Radio(KINDS, value=EXAMPLES[0][3], label="Answer")
-                options = gr.Textbox(label=OPTION_LABEL["Choice"], lines=4, max_lines=8, max_length=40_000,
-                                     value=EXAMPLES[0][4])
-                go = gr.Button("2. Run decision", variant="primary")
-            with gr.Column(scale=4):
-                out = gr.Label(label="Probabilities", num_top_classes=5)
-                meta = gr.Markdown(elem_classes="meta")
-                gr.Markdown("### Use this result in your app\n"
-                            "[Install the package](https://github.com/lawrence3699/jev-style#quick-start) · "
-                            "[View agent integrations](https://github.com/lawrence3699/jev-style#agent-skills)\n\n"
-                            "Run a decision to generate matching Python code below. "
-                            "The code uses the model's direct runtime; install its "
-                            "[requirements](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v4/blob/main/requirements.txt) first.")
-                with gr.Accordion("Copy Python for this decision", open=True):
-                    code = gr.Code(language="python", show_label=False)
-        examples(EXAMPLES, [text, question, kind, options, image], [out, meta, code], decide)
-    with gr.Tab("Several questions · advanced"):
-        with gr.Row(equal_height=False):
-            with gr.Column(scale=5):
-                text2 = gr.Textbox(label="Text or JSON state", lines=6, max_lines=12, max_length=200_000,
-                                   value=MANY[0][1])
-                image2 = gr.Image(label=IMAGE_LABEL, type="filepath", sources=["upload", "clipboard"], height=220)
-                questions = gr.Code(label="Questions", language="json", lines=8, max_lines=16, value=MANY[0][2],
-                                    interactive=True)
-                gr.Markdown(QHELP, elem_classes="meta")
-                go2 = gr.Button("Decide all", variant="primary")
-            with gr.Column(scale=4):
-                out2 = gr.Markdown(elem_classes="many")
-                meta2 = gr.Markdown(elem_classes="meta")
-                gr.Markdown("[Run locally](https://github.com/lawrence3699/jev-style#quick-start) · "
-                            "[Agent integrations](https://github.com/lawrence3699/jev-style#agent-skills)")
-                with gr.Accordion("Copy Python for these decisions", open=True):
-                    code2 = gr.Code(language="python", show_label=False)
-        examples(MANY, [text2, questions, image2], [out2, meta2, code2], decide_several)
-    gr.Markdown(f"[Model]({HF}{REPO}) · [GGUF, text only]({HF}{REPO}-GGUF) · [MLX, text only]({HF}{REPO}-MLX) · "
-                f"[0.8B v3 Space]({HF}spaces/chaoliangUNSW/jev-style-v3) · "
-                "[GitHub](https://github.com/lawrence3699/jev-style) · [jevstyle.com](https://jevstyle.com) · "
-                "Trained in part on soft labels distilled from TypeSafe Jev 1.14 via its public API. "
-                "Not affiliated with TypeSafe or Jev.",
-                elem_classes="foot")
+                        label="Start with a task", elem_id="jev-task-picker")
+        job = gr.State({})
+        with gr.Row(equal_height=False, elem_id="jev-workspace"):
+            with gr.Column(scale=5, min_width=300, elem_id="jev-input-panel"):
+                gr.Markdown("### 1. Your input", elem_classes="jev-section-heading")
+                text = gr.Textbox(label="Text or JSON", lines=3,max_lines=12,max_length=200_000,
+                                  value=EXAMPLES[0][1],elem_classes="jev-field")
+                question = gr.Textbox(label="What should the model decide?",value=EXAMPLES[0][2],max_length=2_000,elem_classes="jev-field")
+                with gr.Row():
+                    go = gr.Button("Run live →",variant="primary",elem_id="jev-run")
+                    cancel = gr.Button("Stop waiting",interactive=False,size="sm")
+                gr.Markdown("Live runs use shared Hugging Face GPU quota. No automatic retries.",elem_classes="jev-meta")
+                with gr.Accordion("Add an image · optional",open=False) as image_panel:
+                    image = gr.Image(label="Receipt, screenshot, or photo", type="filepath", sources=["upload","clipboard"],height=200)
+                    gr.Markdown("Reference it with `<|image_1|>` in your text, or it is placed first.",elem_classes="jev-meta")
+                with gr.Accordion("Adjust answer choices",open=False,elem_classes="jev-advanced") as advanced:
+                    kind = gr.Radio(KINDS,value=EXAMPLES[0][3],label="Answer type")
+                    options = gr.Textbox(label=OPTION_LABEL["Choice"],lines=4,max_lines=8,max_length=40_000,value=EXAMPLES[0][4])
 
-    task.change(load_task, task, [text, question, kind, options, image, out, meta, code], queue=False, api_name=False)
-    kind.change(on_kind, kind, options, queue=False)
-    go.click(decide, [text, question, kind, options, image], [out, meta, code], api_name="decide")
-    go2.click(decide_several, [text2, questions, image2], [out2, meta2, code2], api_name="decide_many")
+                with gr.Accordion("More example inputs",open=False,elem_classes="jev-example-library"):
+                    examples(EXAMPLES,[text,question,kind,options,image])
+                with gr.Accordion("Copy Python for your input",open=False):
+                    gr.Markdown("Start the local server below, then run this in a second terminal. For images, save your selected image as `image.png`.",elem_classes="jev-meta")
+                    code = gr.Code(value=make_export(INITIAL_JOB),language="python",show_label=False,elem_classes="jev-code")
+            with gr.Column(scale=5,min_width=300,elem_id="jev-output-panel"):
+                gr.Markdown("### 2. Your result",elem_classes="jev-section-heading")
+                status = gr.HTML(ready_status(),elem_id="jev-status")
+                out = gr.Label(label="Live probabilities",num_top_classes=5,elem_id="jev-probabilities")
+                meta = gr.Markdown(elem_classes="jev-meta")
+                recovery = gr.Markdown(visible=False,elem_id="jev-recovery")
+                submitted = gr.HTML("")
+                gr.HTML('''<div class="jev-always-actions"><a class="jev-local-link" href="#jev-saved">View saved examples ↓</a>
+                    <a class="jev-local-link" href="#jev-local-setup">Run on your machine ↓</a></div>
+                    <p class="jev-action-help">These options stay available if the queue is full, your quota runs out, or the live request fails.</p>''',elem_id="jev-always-actions")
+                saved = gr.HTML(render_saved_examples(),elem_id="jev-saved")
+    with gr.Tab("Multiple questions"):
+        job2 = gr.State({})
+        with gr.Row(equal_height=False,elem_classes="jev-workspace"):
+            with gr.Column(scale=5,min_width=300,elem_classes="jev-input-panel"):
+                text2 = gr.Textbox(label="Text or JSON",lines=6,max_lines=12,max_length=200_000,value=MANY[0][1],elem_classes="jev-field")
+                with gr.Accordion("Add an image · optional",open=False):
+                    image2 = gr.Image(label="Image",type="filepath",sources=["upload","clipboard"],height=200)
+                questions = gr.Code(label="Questions",language="json",lines=8,max_lines=16,value=MANY[0][2],interactive=True)
+                gr.Markdown(QHELP,elem_classes="jev-meta")
+                with gr.Row():
+                    go2 = gr.Button("Run all questions →",variant="primary")
+                    cancel2 = gr.Button("Stop waiting",interactive=False,size="sm")
+                with gr.Accordion("More example inputs",open=False):
+                    examples(MANY,[text2,questions,image2])
+                with gr.Accordion("Copy Python for your input",open=False):
+                    code2 = gr.Code(language="python",show_label=False)
+            with gr.Column(scale=5,min_width=300,elem_classes="jev-output-panel"):
+                status2 = gr.HTML(ready_status(),elem_classes="jev-status-host")
+                out2 = gr.Markdown(elem_classes="jev-many")
+                meta2 = gr.Markdown(elem_classes="jev-meta")
+                recovery2 = gr.Markdown(visible=False,elem_classes="jev-recovery")
+                submitted2 = gr.HTML("")
+                gr.HTML('<a class="jev-local-link" href="#jev-local-setup">Run locally without the shared GPU queue ↓</a>')
+                saved2 = gr.HTML(render_saved_examples().replace('id="saved-','id="saved-many-'))
+    with gr.Column(elem_id="jev-local-setup"):
+        gr.Markdown("## Keep going on your machine\nOpen weights, no hosted quota. Python 3.10+; first start downloads the model.")
+        with gr.Tab("PyTorch · text and images"):
+            gr.Code(value=local_commands(backend="torch"),language="shell",label="Run in an activated virtual environment")
+        with gr.Tab("Apple silicon · text only"):
+            gr.Code(value=local_commands(backend="mlx"),language="shell",label="Run in an activated virtual environment")
+        gr.Markdown("[Step-by-step setup](https://github.com/lawrence3699/jev-style#quick-start) · "
+                    "[Routing guide](https://jevstyle.com/use-cases/local-llm-routing/) · "
+                    "[Evaluate your data](https://jevstyle.com/guides/decision-evaluation/)\n\n"
+                    "The 2B MLX and GGUF builds are text-only. Use PyTorch for images. Local speed and memory use depend on your hardware.",elem_classes="jev-meta")
+    gr.Markdown(f"[Model and limits]({HF}{REPO}) · [Source](https://github.com/lawrence3699/jev-style/tree/main/space-2b) · "
+                "[Hugging Face GPU quotas](https://huggingface.co/docs/hub/spaces-zerogpu)\n\n"
+                "A probability is a model judgment. Validate thresholds on your own data before automating actions. "
+                "Trained in part on soft labels distilled from TypeSafe Jev 1.14. Independent project; not affiliated with TypeSafe.",elem_classes="jev-foot")
 
-demo.queue(max_size=30)
+    outputs = [out,meta,code,status,recovery,submitted,saved,go,cancel]
+    outputs2 = [out2,meta2,code2,status2,recovery2,submitted2,saved2,go2,cancel2]
+    start = go.click(prepare_one,[text,question,kind,options,image,task],[job]+outputs,
+                     queue=False,api_visibility="private",show_progress="hidden",trigger_mode="once")
+    run = start.then(run_job,job,outputs,api_visibility="private",show_progress="minimal",
+                     show_progress_on=out,concurrency_id="live-inference",concurrency_limit=1)
+    start2 = go2.click(prepare_many,[text2,questions,image2],[job2]+outputs2,
+                       queue=False,api_visibility="private",show_progress="hidden",trigger_mode="once")
+    run2 = start2.then(run_job,job2,outputs2,api_visibility="private",show_progress="minimal",
+                       show_progress_on=out2,concurrency_id="live-inference",concurrency_limit=1)
+    cancel.click(lambda:stopped(False),outputs=[out,meta,status,recovery,go,cancel],cancels=[run],
+                 queue=False,api_visibility="private",show_progress="hidden")
+    cancel2.click(lambda:stopped(True),outputs=[out2,meta2,status2,recovery2,go2,cancel2],cancels=[run2],
+                  queue=False,api_visibility="private",show_progress="hidden")
+    task.change(select_task,task,[text,question,kind,options,image,out,meta,code,status,recovery,submitted,saved,go,cancel,advanced,image_panel],
+                cancels=[run],queue=False,api_visibility="private",show_progress="hidden")
+    kind.change(on_kind,kind,options,queue=False,api_visibility="private",show_progress="hidden")
+    # Preserve the public API's existing component serialization and three outputs.
+    with gr.Row(visible=False):
+        api_one = gr.Button("API single")
+        api_many = gr.Button("API multiple")
+    api_one.click(decide,[text,question,kind,options,image],[out,meta,code],api_name="decide",
+                  concurrency_id="live-inference",concurrency_limit=1)
+    api_many.click(decide_several,[text2,questions,image2],[out2,meta2,code2],api_name="decide_many",
+                   concurrency_id="live-inference",concurrency_limit=1)
+
+demo.queue(max_size=30,default_concurrency_limit=1)
 
 if __name__ == "__main__":
-    demo.launch(theme=THEME, css=CSS, ssr_mode=False)
+    demo.launch(theme=THEME,css=CSS,js=WAIT_JS,ssr_mode=False,show_error=False,
+                max_file_size="10mb",server_name=os.environ.get("GRADIO_SERVER_NAME"),
+                server_port=int(os.environ["GRADIO_SERVER_PORT"]) if os.environ.get("GRADIO_SERVER_PORT") else None)
