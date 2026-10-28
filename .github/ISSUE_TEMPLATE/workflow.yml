@@ -1,0 +1,15 @@
+name: Question or workflow
+description: Ask about setup, share an integration, or propose a use case.
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to do?
+      description: Describe the workflow and what you tried. Remove private data and credentials.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Setup or example
+      description: Model, backend, package version, minimal code, or a link to a public integration.

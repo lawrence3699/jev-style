@@ -1,0 +1,90 @@
+calendar_create_event: create a new event in the user's calendar with a title, start and end time, location and a list of invited people
+calendar_list_events: list the user's calendar events between two dates, optionally filtered by a keyword in the title or description
+calendar_update_event: move, rename or change the attendees of an existing calendar event that the user already created
+calendar_cancel_event: cancel an existing calendar event and send a cancellation notice to everyone who was invited to it
+email_search: search the user's mailbox by sender, recipient, subject words, date range or attachment type and return matching messages
+email_read: open one email message by its id and return the full body text, the headers and the list of attachments
+email_draft: write a new email draft for the user to review, with recipients, subject and body, without sending it
+email_send: send an email that the user has already approved, to the given recipients, with optional attachments
+email_reply: reply to an existing email thread, quoting the previous message, to the sender only or to everyone on the thread
+contacts_lookup: find a person in the user's address book by name, company or email address and return their contact details
+contacts_add: add a new person to the user's address book with name, phone numbers, email addresses and company
+files_search: search the user's cloud drive for documents, spreadsheets and slides by file name, content words or owner
+files_read: open a document from the user's cloud drive by its id and return its text content page by page
+files_upload: upload a local file into a folder of the user's cloud drive and return a shareable link to it
+files_share: change who can view or edit a file on the user's cloud drive, by email address or by public link
+spreadsheet_read_range: read a range of cells from a spreadsheet, for example A1:D40 on a named sheet, and return the values
+spreadsheet_write_range: write values or formulas into a range of cells of a spreadsheet the user owns
+spreadsheet_create_chart: create a chart from a range of spreadsheet cells, choosing the chart type, the axes and the title
+slides_create_deck: create a new slide presentation from an outline, with one slide per heading and speaker notes
+web_search: search the public web for recent pages about a topic and return titles, links and short snippets
+web_fetch: download one public web page by its URL and return its readable text without navigation or ads
+news_headlines: get today's top news headlines for a country or a topic such as business, sport or technology
+weather_forecast: get the weather forecast for a city for the next seven days, with temperature, rain and wind
+weather_alerts: list active severe weather warnings such as storms, floods or heat waves for a region
+maps_directions: get driving, walking, cycling or public transport directions between two places, with travel time
+maps_nearby: find places of a given kind, such as pharmacies or cafes, near an address, sorted by distance
+flights_search: search flights between two airports on given dates and return prices, airlines and stop counts
+flights_status: get the live status of a flight by its flight number: delays, gate, terminal and landing time
+hotels_search: search hotels in a city for given check-in and check-out dates, with price, rating and distance
+restaurant_booking: book a table at a restaurant for a given date, time and number of people
+rideshare_request: order a car to pick the user up at an address and take them to a destination
+currency_convert: convert an amount of money from one currency to another at today's exchange rate
+stock_quote: get the latest share price, daily change and trading volume for a stock ticker symbol
+bank_balance: show the current balance and the last transactions of one of the user's linked bank accounts
+bank_transfer: move money from one of the user's bank accounts to another account or to a saved payee
+invoice_create: create an invoice for a client with line items, tax, due date and payment instructions
+expense_log: record a business expense with amount, category, date and a photo of the receipt
+shopping_search: search online shops for a product and compare prices, delivery times and seller ratings
+order_track: track a parcel from an online order by its tracking number and show the delivery estimate
+order_return: start a return for an item from a past online order and print the return label
+smart_home_lights: turn lights in a room of the user's home on or off, or change their brightness and colour
+smart_home_thermostat: read or set the target temperature of the home thermostat and switch heating or cooling
+smart_home_lock: lock or unlock the front door smart lock and report whether it is currently locked
+music_play: play a song, an album, an artist or a playlist on the user's speakers or headphones
+podcast_search: find podcast episodes about a topic and return the show, the episode title and the length
+reminder_create: set a reminder that notifies the user at a given time or when they arrive at a place
+timer_start: start a countdown timer for a number of minutes and seconds, with an optional label
+notes_create: save a new note in the user's notebook with a title, the text and optional tags
+notes_search: search the user's notes by words in the title or text and return the matching notes
+translate_text: translate a piece of text from one language into another and keep the original formatting
+calculator: evaluate an arithmetic or algebraic expression exactly, including percentages and unit conversions
+unit_convert: convert a quantity between units of length, weight, volume, temperature, speed or area
+code_run_python: run a short Python program in an isolated sandbox and return its printed output and errors
+github_issues: list, open or comment on issues of a GitHub repository that the user has access to
+github_pull_request: create a pull request from a branch of a repository, with a title and a description
+chat_send_message: send a message to a person or a channel in the team chat app on behalf of the user
+chat_read_channel: read the latest messages of a team chat channel and summarise who said what
+video_call_schedule: schedule a video call, create the meeting link and add it to the invited people's calendars
+fitness_log: record a workout with its type, duration, distance and heart rate in the user's health app
+health_medication: list the user's medications and remind them when the next dose of each one is due
+password_manager_lookup: look up which saved login the user has for a website, without revealing the password itself
+vpn_connect: connect the user's laptop to the company VPN or disconnect it, and report the connection status
+printer_print: send a document from the user's cloud drive to a printer on the office network, with copies and paper size
+screenshot_capture: take a screenshot of the user's screen or of one window and save it to the desktop
+clipboard_read: read the text that is currently on the user's clipboard so it can be used in the next step
+system_battery: report the laptop's battery level, whether it is charging and the estimated time remaining
+system_volume: read or change the output volume of the user's computer, or mute and unmute it
+app_launch: open an installed desktop application by its name, for example the browser or the text editor
+browser_open_url: open a web address in a new tab of the user's browser so the user can see the page
+browser_bookmarks: list, add or remove bookmarks in the user's browser, grouped by folder
+recipe_search: find cooking recipes by dish name, ingredients on hand, diet or cooking time
+grocery_list: add items to or remove items from the shared household grocery list
+food_delivery_order: order a meal for delivery from a nearby restaurant through a food delivery app
+movie_showtimes: list cinema showtimes for a film near the user, with the cinema, the time and the ticket price
+event_tickets: search concerts, plays and sports events in a city and buy tickets for a chosen event
+car_rental_search: search rental cars at an airport or a city location for given pickup and drop-off dates
+train_search: search train connections between two stations on a date, with times, changes and fares
+parking_find: find available parking near a destination with the hourly price and the walking distance
+dictionary_define: give the definition, pronunciation and example sentences of an English word
+wikipedia_summary: return the opening summary of the Wikipedia article about a person, place or topic
+math_plot: draw the graph of a mathematical function over a range and return the image
+image_generate: create an image from a text description, with a chosen size and style
+image_describe: describe what is shown in an image that the user uploaded, including any visible text
+pdf_merge: combine several PDF files from the user's cloud drive into one PDF in a chosen order
+pdf_extract_tables: extract the tables from a PDF document and return them as spreadsheet rows
+speech_to_text: transcribe an audio recording into text, with speaker names and timestamps
+text_to_speech: read a piece of text aloud with a chosen voice and save the audio as a file
+social_post: publish a post with text and images on the user's social media account after approval
+social_mentions: list recent posts and comments on social media that mention the user or their company
+survey_create: create an online survey form with multiple-choice and free-text questions and share its link
