@@ -404,7 +404,7 @@ def load_task(name: str):
         return [gr.update() for _ in range(5)] + [{}, "", ""]
     _, text, question, kind, options, image = EXAMPLES[TASKS[name]]
     return text, question, kind, gr.update(value=options, visible=kind != "Yes / No",
-                                         label=OPTION_LABEL[kind]), image, {}, "", ""
+                                         label=OPTION_LABEL.get(kind, "")), image, {}, "", ""
 
 
 def qjson(qs: list) -> str:
