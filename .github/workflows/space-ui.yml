@@ -1,0 +1,26 @@
+name: Space UI recovery
+on:
+  push:
+    branches: [main]
+    paths: ['space-2b/**', '.github/workflows/space-ui.yml']
+  pull_request:
+    paths: ['space-2b/**', '.github/workflows/space-ui.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - name: Install UI dependencies only
+        run: uv venv && uv pip install 'gradio==6.28.0' pytest
+      - name: Validate recovery without a GPU or model downloads
+        env:
+          JEV_DEMO_PREVIEW: '1'
+          HF_HUB_OFFLINE: '1'
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          GRADIO_ANALYTICS_ENABLED: 'False'
+        run: uv run --no-sync pytest -q space-2b/tests
