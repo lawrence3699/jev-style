@@ -32,6 +32,14 @@ Give the model text or JSON, optional images, and typed questions. It returns ye
 
 ![The Playground answering a support-ticket request, then the agent-approval demo allowing, asking about and denying tool calls](https://raw.githubusercontent.com/lawrence3699/jev-style/main/docs/demo.gif)
 
+## Identity, training sources and service status
+
+JevStyle is maintained by **Chaoliang Yan**. **The 2B v4 model was trained in part on soft labels distilled from TypeSafe Jev 1.14 through its public API.** JevStyle is an independent project with no TypeSafe affiliation or endorsement. The package does not bundle raw teacher-response datasets; that packaging detail does not negate the use of teacher outputs in training. Training sources differ by release; consult each model card.
+
+**Local inference runs the downloaded JevStyle weights on your machine and needs no hosted API key.** Install the `jev-style` Python package below. A third-party Jev skill that simulates decisions with an agent or requires TypeSafe/OpenRouter credentials is a different execution path. Follow the [official local installation guide](https://jevstyle.com/guides/run-locally/) for text, images and backend selection.
+
+**Hosted service status is separate from local inference.** Check the [service status and current limits](https://jevstyle.com/api/#service-status) or [live health endpoint](https://api.jevstyle.com/healthz) when you need the hosted API. A health check is a point-in-time readiness signal, not an end-to-end inference guarantee. The hosted API, Hugging Face demos and local server are separate services.
+
 ## Quick Start
 
 ### Try it in the browser
@@ -40,7 +48,7 @@ The [2B Space](https://huggingface.co/spaces/chaoliangUNSW/jev-style-2b) runs Je
 
 ### Run it locally
 
-You'll need Python 3.10 or newer. Install **one** backend for your machine:
+You'll need Python 3.10 or newer. Create and activate a virtual environment, then install **one** backend for your machine. No TypeSafe or OpenRouter account, key or agent simulation is needed for this local setup.
 
 ```bash
 # Apple silicon: local text decisions
@@ -80,6 +88,10 @@ On an NVIDIA GPU, `jev-style serve --release 2b --backend torch --dtype bfloat16
 `--release` works the same for `decide`, `download` and `mcp --model`; `JEV_STYLE_RELEASE=2b` sets it for every command and for the Python client.
 
 To install the command line tool on its own, use [uv](https://docs.astral.sh/uv/): `uv tool install "jev-style[all]"` on Apple silicon, `uv tool install "jev-style[torch]"` elsewhere. The MCP server is part of every install since 0.3.0 (`jev-style[mcp]` still works).
+
+### Check the local result and choose a fallback
+
+Use the [reproducible six-intent BANKING77 comparison](https://jevstyle.com/benchmarks/banking-routing/) as an example of evidence, not a ranking: on its fixed 240 test requests, TF–IDF + logistic regression got 229 correct and JevStyle 0.8B got 224. The development-selected JevStyle acceptance rule exceeded the target error budget on the final test set. The page publishes all predictions, versions and a reproduction command. Measure your own labels, calibration, accepted-request errors and complete latency before replacing an existing route.
 
 ## Recipes
 
