@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use Jev-Style in your work, please cite it. Each model card on Hugging Face has its own citation entry."
+title: "Jev-Style: small calibrated decision models for AI agents, with a local server, agent skills, MCP tools and a Claude Code guard"
+type: software
+authors:
+  - family-names: Yan
+    given-names: Chaoliang
+version: 0.6.3
+date-released: 2026-11-02
+license: Apache-2.0
+repository-code: https://github.com/lawrence3699/jev-style
+url: https://jevstyle.com
+keywords:
+  - decision model
+  - text classification
+  - calibration
+  - LLM routing
+  - guardrails
+  - MCP

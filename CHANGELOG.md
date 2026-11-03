@@ -3,6 +3,10 @@
 Versions follow [semantic versioning](https://semver.org/). Each release pins the model revisions it loads
 (`jev_style/models.py`), so upgrading the package is what changes the weights you get.
 
+## Unreleased
+
+Documentation only. The README is restructured the way the larger decision-model repositories present themselves: quick start and the reasons to use it first, one model table with a recommendation, a comparison with hosted Jev, Kev and Laya, then the agent tooling, and new sections on how the model works, its limitations, where it is used, a roadmap and a citation. The identity, training-source and service-status statements move to an "About the project" section at the end, unchanged in substance. Added `README.zh-CN.md`, `CITATION.cff`, a logo and a social-preview image under `docs/assets/`. Runtime behavior, dependencies, model revisions and weights are unchanged.
+
 ## 0.6.3 (2026-11-02)
 
 Documentation-only release: clarify the official local installation, separate local inference from hosted API and third-party Jev services, place the 2B v4 teacher-label provenance alongside the independence statement, and link the dated/live service-status source and reproducible routing comparison. PyPI now serves the same corrected README as the repository. Model revisions, dependencies, inference behavior and weights are unchanged from 0.6.2.
