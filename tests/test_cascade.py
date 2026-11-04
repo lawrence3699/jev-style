@@ -228,7 +228,7 @@ def test_all_tiers_failed_surfaces_the_error_like_adapter():
     body = e.body()["error"]
     assert body["tier"] == 1 and body["tier_model"] == "model-1"
     assert [x["code"] for x in body["tier_errors"]] == ["input_budget_exceeded", "tier_unavailable"]
-    r = TestClient(create_app(a)).post("/v1/systemone", json={"state": STATE, "questions": QS})
+    r = TestClient(create_app(a), base_url="http://127.0.0.1").post("/v1/systemone", json={"state": STATE, "questions": QS})
     assert r.status_code == 422 and r.json()["error"]["code"] == "input_budget_exceeded"
 
 
@@ -321,9 +321,9 @@ TICKET = {"state": STATE, "questions": QS}
 
 
 def test_response_schema_is_a_superset_of_the_single_model_one():
-    single = TestClient(create_app(JevStyle(fake=True)._adapter)).post("/v1/systemone", json=TICKET).json()
+    single = TestClient(create_app(JevStyle(fake=True)._adapter), base_url="http://127.0.0.1").post("/v1/systemone", json=TICKET).json()
     app = create_app(CascadeAdapter.from_config(_fake_config(thresholds=[0.0])))
-    c = TestClient(app)
+    c = TestClient(app, base_url="http://127.0.0.1")
     r = c.post("/v1/systemone", json=TICKET)
     assert r.status_code == 200 and r.headers["x-request-id"].startswith("req_")
     body = r.json()
@@ -348,7 +348,7 @@ def test_response_schema_is_a_superset_of_the_single_model_one():
 
 
 def test_budget_error_through_the_cascade_is_the_adapter_error():
-    c = TestClient(create_app(CascadeAdapter.from_config(_fake_config())))
+    c = TestClient(create_app(CascadeAdapter.from_config(_fake_config())), base_url="http://127.0.0.1")
     r = c.post("/v1/systemone", json={"state": "word " * 30_000, "questions": {"x": noul("long?")}})
     assert r.status_code == 400 and r.json()["error"]["code"] == "max_tokens_exceeded"
     assert r.json()["error"]["tier"] == 1

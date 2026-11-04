@@ -7,13 +7,14 @@
     js = JevStyle.from_pretrained("chaoliangUNSW/Jev-Style-0.8B-Decision-v3-GGUF")   # pick the build by repo id
     js = JevStyle(base_url="http://127.0.0.1:8765")      # over HTTP: jev-style serve, or another server
                                                          # that implements POST /v1/systemone
+    js = JevStyle(base_url="https://api.jevstyle.com", api_key="...")   # a hosted server: pass its key
     js = JevStyle(cascade="cascade.json")                # a confidence cascade of several models
                                                          # (see jev_style.cascade)
     js = JevStyle(cascade="cascade-9b")                  # a named cascade (jev_style.cascades.CASCADES)
     out = js.decide("I was charged twice.", {
         "billing": noul("Is this about billing?"),
         "team": choice("Which team?", {"billing": None, "tech": "bugs, outages"}),
-        "urgency": score("How urgent?", ["low", "medium", "high"]),
+        "phishing": noul("This message is a phishing attempt."),
     })
     out["answers"]["team"]["choice"]
 
@@ -21,7 +22,15 @@
     js.decide({"receipt": "r1"}, {"over": noul("Is the total over 50?")}, assets={"r1": image("receipt.jpg")})
 
 ``decide`` returns exactly the HTTP response body of ``POST /v1/systemone`` and raises
-``JevStyleError`` (status, code, message, question) for the contract's error bodies.
+``JevStyleError`` (status, code, message, question) for the contract's error bodies. It reads both error
+shapes in use: the package's nested ``{"error": {"code", "message", "question"?}}`` and the flat
+``{"error": "<code>", "message": "..."}`` of the hosted api.jevstyle.com (``parse_error_body``). Over-long input
+is ``400 max_tokens_exceeded`` from this package's server and ``413 input_too_large`` from the hosted API;
+``JevStyleError.input_too_long`` is true for both.
+
+The API key: ``api_key=`` if given, else ``$JEV_STYLE_API_KEY``, which is only sent to a loopback server or to
+the server named in ``$JEV_STYLE_URL``; any other ``base_url`` needs an explicit ``api_key`` (so a key for the
+local server or for api.jevstyle.com is never sent to a third-party server by accident).
 
 For scripts there are module-level shortcuts that share one lazily created client
 (``$JEV_STYLE_URL`` if set, else the local model with ``$JEV_STYLE_BACKEND`` or ``auto``)::
@@ -38,10 +47,61 @@ import threading
 from typing import Any, Iterable, Mapping
 
 
+# Error codes that all mean "the input is over the model's budget": this package's server and TypeSafe's API
+# answer 400 ``max_tokens_exceeded``, the hosted api.jevstyle.com 413 ``input_too_large``, servers before jev-style
+# 0.5.0 422 ``input_budget_exceeded``.
+INPUT_TOO_LONG_CODES = frozenset({"max_tokens_exceeded", "input_too_large", "input_budget_exceeded"})
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
 class JevStyleError(Exception):
     def __init__(self, status: int, code: str, message: str, question: str | None = None, body: dict | None = None):
         super().__init__(f"{status} {code}: {message}" + (f" (question {question!r})" if question else ""))
         self.status, self.code, self.message, self.question, self.body = status, code, message, question, body or {}
+
+    @property
+    def input_too_long(self) -> bool:
+        """The input was over the model's budget, whichever server answered (see ``INPUT_TOO_LONG_CODES``)."""
+        return self.code in INPUT_TOO_LONG_CODES
+
+
+def parse_error_body(body: Any, status: int | None = None) -> dict:
+    """The ``{"code", "message", "question"?}`` of an error response body, whichever shape the server uses:
+
+    * nested, this package's contract: ``{"error": {"code": ..., "message": ..., "question"?: ...}}``
+    * flat, the hosted api.jevstyle.com: ``{"error": "<code>", "message": "...", ...}``
+    * a bare message, e.g. jevk5-serve: ``{"error": "<message>"}`` (code ``http_error``)
+
+    Anything else gives ``{"code": "http_error", "message": ""}``; ``status`` only names the code when it is a
+    well-known one and the body names none."""
+    out: dict = {"code": "http_error", "message": ""}
+    if not isinstance(body, dict):
+        return _with_status(out, status)
+    err = body.get("error")
+    if isinstance(err, dict):
+        out["code"] = str(err.get("code") or out["code"])
+        out["message"] = str(err.get("message") or "")
+        if err.get("question") is not None:
+            out["question"] = str(err["question"])
+        for k in ("limit", "retry_after"):
+            if err.get(k) is not None:
+                out[k] = err[k]
+    elif isinstance(err, str):
+        if "message" in body:                   # flat: "error" is the code
+            out["code"], out["message"] = err, str(body.get("message") or "")
+        else:                                   # a bare message
+            out["message"] = err
+        if body.get("question") is not None:
+            out["question"] = str(body["question"])
+    elif isinstance(body.get("message"), str):
+        out["message"] = body["message"]
+    return _with_status(out, status)
+
+
+def _with_status(err: dict, status: int | None) -> dict:
+    if err["code"] == "http_error" and status == 401:
+        err["code"] = "unauthorized"
+    return err
 
 
 def noul(instructions: Any, criteria: Mapping[str, Any] | None = None) -> dict:
@@ -80,7 +140,7 @@ class JevStyle:
         """``cascade``: a cascade name (``jev-style releases``), file or dict. ``adapter``: an already built engine
         with the Adapter surface (``systemone(body)``, ``models()``), e.g. ``jevk5_engine.load_jevk5(...)``."""
         self.base_url = base_url.rstrip("/") if base_url else None
-        self.api_key = api_key if api_key is not None else os.environ.get("JEV_STYLE_API_KEY")
+        self.api_key = api_key if api_key is not None else implicit_api_key(self.base_url)
         self.timeout = timeout
         self._http = http_client
         self._adapter = None
@@ -120,12 +180,9 @@ class JevStyle:
             body = resp.json()
         except ValueError:
             body = {}
-        err = body.get("error") if isinstance(body, dict) else None
-        if isinstance(err, str):                # servers that answer {"error": "<message>"} (e.g. jevk5-serve)
-            err = {"message": err}
-        err = err if isinstance(err, dict) else {}
-        raise JevStyleError(resp.status_code, err.get("code", "http_error"), err.get("message", resp.text[:500]),
-                          err.get("question"), body)
+        err = parse_error_body(body, resp.status_code)
+        raise JevStyleError(resp.status_code, err["code"], err["message"] or resp.text[:500], err.get("question"),
+                          body if isinstance(body, dict) else {})
 
     # -- API ---------------------------------------------------------------------------------
     def decide(self, state: Any, questions: Mapping[str, dict], model: str | None = None,
@@ -178,6 +235,34 @@ def _takes(fn: Any, name: str) -> bool:
         return name in inspect.signature(fn).parameters
     except (TypeError, ValueError):
         return False
+
+
+def _host_of(url: str | None) -> str:
+    from urllib.parse import urlparse
+    try:
+        return (urlparse(url or "").hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def is_loopback(url: str | None) -> bool:
+    """``url`` points at this machine (127.0.0.0/8, localhost, ::1)."""
+    host = _host_of(url)
+    return host in LOOPBACK_HOSTS or host.startswith("127.")
+
+
+def implicit_api_key(base_url: str | None) -> str | None:
+    """``$JEV_STYLE_API_KEY`` when it may be sent to ``base_url`` without being named explicitly: in-process
+    (never sent), a loopback server, or the server ``$JEV_STYLE_URL`` names. For any other URL the caller passes
+    ``api_key=`` (``--key NAME=ENV`` for ``jev-style eval``, ``--api-key-env NAME`` for ``jev-style decide --url``,
+    ``api_key_env`` for a cascade tier)."""
+    key = os.environ.get("JEV_STYLE_API_KEY")
+    if not key or base_url is None or is_loopback(base_url):
+        return key
+    configured = (os.environ.get("JEV_STYLE_URL") or "").rstrip("/")
+    if configured and configured.lower() == base_url.rstrip("/").lower():
+        return key
+    return None
 
 
 # -- engine targets ---------------------------------------------------------------------------------

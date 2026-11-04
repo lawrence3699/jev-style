@@ -30,7 +30,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from .models import DEFAULT_RELEASE, release_keys
+from .client import is_loopback, parse_error_body
+from .models import env_release, env_release_problem, release_keys
 
 try:
     from mcp.server.mcpserver import MCPServer
@@ -44,15 +45,44 @@ from . import __version__  # noqa: E402
 DEFAULT_URL = "http://127.0.0.1:8765"
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 
-INSTRUCTIONS = """Jev-Style is a small local decision model. It does not write text: it reads a state
-(text or JSON, up to 25,600 tokens) and answers typed questions about it with calibrated probabilities.
+# What the MCP client's model reads before deciding what to send. ``build_instructions`` fills in the budgets of
+# the model the backend actually serves and says where the state goes (this machine, or a remote URL).
+INSTRUCTIONS_TEMPLATE = """Jev-Style is a small decision model. It does not write text: it reads a state
+(text or JSON{context}) and answers typed questions about it with calibrated probabilities.
 - noul: probability that a statement is true (0..1). Use for checks and gates.
 - choice: one option out of 1..255, with a probability per option and a confidence.
 - score: position on an ordered scale of 2..10 levels (lowest first); score = expected level index.
 Ask several questions about the same state in one `decide` call: the state is read once.
-Each question with its options must fit in 2,048 tokens; nothing is truncated, oversize input is an error.
+{head}Nothing is truncated; oversize input is an error. `model_info` reports the exact model and limits.
 Turn probabilities into actions with thresholds in code (e.g. act >= 0.9, review 0.5-0.9, stop < 0.5).
-Everything runs on this machine; nothing is sent elsewhere."""
+{where}"""
+INSTRUCTIONS = INSTRUCTIONS_TEMPLATE.format(
+    context=", up to the model's context length", head="",
+    where="Everything runs on this machine; nothing is sent elsewhere.")
+
+
+def build_instructions(backend: Any) -> str:
+    """The server instructions for this backend: the served model's context and per-question budgets (from
+    ``GET /v1/models``, left out when the backend cannot be asked right now) and whether the state stays on this
+    machine or goes to a remote URL."""
+    context, head = ", up to the model's context length", ""
+    try:
+        entry = (backend.models().get("data") or [{}])[0]
+        ctx, hm = entry.get("context_tokens"), entry.get("head_max_tokens")
+        if isinstance(ctx, int) and ctx > 0:
+            context = f", up to {ctx:,} tokens"
+            if isinstance(hm, int) and 0 < hm < ctx:
+                head = f"Each question with its options must fit in {hm:,} tokens. "
+    except Exception:  # noqa: BLE001 - server down, or a backend without /v1/models: say less, not wrong
+        pass
+    url = getattr(backend, "url", None)
+    if url and not is_loopback(url):
+        where = f"Requests go to the remote server {url}: every state you send leaves this machine."
+    elif url:
+        where = f"Everything runs on this machine (a local server at {url}); nothing is sent elsewhere."
+    else:
+        where = "Everything runs on this machine, inside this process; nothing is sent elsewhere."
+    return INSTRUCTIONS_TEMPLATE.format(context=context, head=head, where=where)
 
 StateT = Union[str, Dict[str, Any], List[Any]]
 
@@ -85,11 +115,11 @@ class HttpBackend:
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             try:
-                err = json.loads(e.read().decode("utf-8")).get("error", {})
-            except Exception:
-                err = {}
+                err = parse_error_body(json.loads(e.read().decode("utf-8")), e.code)
+            except Exception:  # noqa: BLE001 - not JSON: report the status and reason
+                err = {"code": "http_error", "message": ""}
             q = f" (question {err['question']!r})" if err.get("question") else ""
-            raise BackendError(f"{e.code} {err.get('code', 'http_error')}: {err.get('message', e.reason)}{q}")
+            raise BackendError(f"{e.code} {err['code']}: {err['message'] or e.reason}{q}")
         except (urllib.error.URLError, OSError) as e:
             raise BackendError(f"Jev-Style server not reachable at {self.url}: {getattr(e, 'reason', e)}. "
                                f"Start it with: jev-style serve")
@@ -123,7 +153,8 @@ class InProcessBackend:
 # server
 # ---------------------------------------------------------------------------------------------
 def build_server(backend: Any) -> MCPServer:
-    mcp = MCPServer("jev-style", title="Jev-Style decisions", instructions=INSTRUCTIONS, version=__version__)
+    mcp = MCPServer("jev-style", title="Jev-Style decisions", instructions=build_instructions(backend),
+                    version=__version__)
 
     def run(state: Any, questions: Dict[str, Any]) -> dict:
         try:
@@ -225,14 +256,18 @@ def make_backend(args: argparse.Namespace) -> Any:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    problem = env_release_problem()
+    if problem:
+        print(f"error: {problem}", file=sys.stderr)
+        return 2
     ap = argparse.ArgumentParser(prog="jev-style mcp", description="Jev-Style MCP server")
     src = ap.add_mutually_exclusive_group()
     src.add_argument("--url", help=f"Jev-Style server URL (default $JEV_STYLE_URL or {DEFAULT_URL})")
     src.add_argument("--model", action="store_true", help="load the real model in-process")
     src.add_argument("--fake", action="store_true", help="in-process fake engine, no model")
     ap.add_argument("--backend", default="auto", choices=("auto", "torch", "mlx", "gguf"))
-    ap.add_argument("--release", default=os.environ.get("JEV_STYLE_RELEASE", DEFAULT_RELEASE), choices=release_keys(),
-                    help="which model --model loads")
+    ap.add_argument("--release", default=env_release(), choices=release_keys(),
+                    help="which model --model loads ($JEV_STYLE_RELEASE)")
     ap.add_argument("--api-key-env", default="JEV_STYLE_API_KEY", help="env var holding the server's bearer key")
     ap.add_argument("--timeout", type=float, default=120.0)
     ap.add_argument("--allow-remote", action="store_true", help="allow a non-loopback --url")

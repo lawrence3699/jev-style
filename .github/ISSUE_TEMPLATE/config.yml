@@ -1,5 +1,11 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Ask a question or share an idea
+    url: https://github.com/lawrence3699/jev-style/discussions
+    about: Usage questions, ideas and workflows go to GitHub Discussions.
+  - name: Report a security problem privately
+    url: https://github.com/lawrence3699/jev-style/security/advisories/new
+    about: Please do not open a public issue for a vulnerability (see SECURITY.md).
   - name: Try Jev-Style online
     url: https://huggingface.co/spaces/chaoliangUNSW/jev-style-2b
     about: Try text and image decisions before installing a backend.

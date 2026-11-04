@@ -3,6 +3,8 @@ name: release
 # Push a tag vX.Y.Z whose version equals jev_style/__version__ to publish to PyPI.
 # Publishing uses PyPI Trusted Publishing (no API token): on pypi.org, add a publisher for
 # owner lawrence3699, repository jev-style, workflow release.yml, environment pypi.
+# A manual run (workflow_dispatch) can only publish to TestPyPI: PyPI releases come from tags, where the
+# tag is checked against the package version first, so a stray click cannot burn a version number.
 
 on:
   push:
@@ -10,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: "testpypi or pypi"
+        description: "testpypi (PyPI itself is published from a vX.Y.Z tag only)"
         default: testpypi
 
 jobs:
@@ -59,7 +61,7 @@ jobs:
           repository-url: https://test.pypi.org/legacy/
 
   pypi:
-    if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+    if: github.ref_type == 'tag'
     needs: build
     runs-on: ubuntu-latest
     environment: pypi

@@ -1,18 +1,26 @@
 jev-style
 Copyright 2026 chaoliangUNSW (GitHub: lawrence3699). Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-The model weights are downloaded at run time from the Hugging Face Hub
-(chaoliangUNSW/Jev-Style-0.8B-Decision-v3 and its -MLX / -GGUF builds). They are a fine-tuned
-derivative of Qwen3.5-0.8B (Copyright 2026 Alibaba Cloud, Apache-2.0); see the NOTICE file of each
-model repository for the modifications.
+The model weights are downloaded at run time from the Hugging Face Hub; this package pins one revision of
+each of these repositories (jev_style/models.py) and includes none of them:
+
+* chaoliangUNSW/Jev-Style-0.8B-Decision-v3 and its -MLX / -GGUF builds: a fine-tuned derivative of
+  Qwen3.5-0.8B (Copyright 2026 Alibaba Cloud, Apache-2.0).
+* chaoliangUNSW/Jev-Style-2B-Decision-v3 and its -MLX / -GGUF builds: a fine-tuned derivative of
+  Qwen3.5-2B (Copyright 2026 Alibaba Cloud, Apache-2.0).
+* chaoliangUNSW/Jev-Style-2B-Decision-v4 and its -MLX / -GGUF builds: a fine-tuned derivative of
+  Qwen3.5-2B (Copyright 2026 Alibaba Cloud, Apache-2.0), trained in part on soft labels distilled from
+  TypeSafe Jev 1.14 through its public API, as its model card discloses.
+
+See the NOTICE file of each model repository for the modifications and training sources of that release.
 
 The question types (choice / score / noul) and the request shape follow the public typed-decision
 ("systemone") convention so the same client code works against different servers.
 
 Not affiliated with, endorsed by or connected to TypeSafe or Jev. "Jev-Style" only describes the kind
-of model (a small typed-decision model in a similar style); no Jev weights, code or outputs are included.
-Not affiliated with or endorsed by Alibaba Cloud / the Qwen team, the Laya authors, the Kev authors or the
-JevK5 author.
+of model (a small typed-decision model in a similar style); no Jev weights or code are included, and this
+package distributes no raw teacher API responses. Not affiliated with or endorsed by Alibaba Cloud / the Qwen
+team, the Laya authors, the Kev authors or the JevK5 author.
 
 The named cascade cascade-9b and jevk5: cascade tiers use JevK5-9B by alibiserikbay
 (alibiserikbay/JevK5-9B, Apache-2.0) through its runtime jevk5 (github.com/allebee/jevk5, Apache-2.0).

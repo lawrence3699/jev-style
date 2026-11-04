@@ -15,12 +15,13 @@ structured judgement; keep using an LLM for writing.
 |---|---|---|
 | `noul` | `noul` = P(statement is true), 0..1 | checks, gates, "is this X?" |
 | `choice` | `choice` + `probabilities` per option + `confidence` | routing, labels, picking a candidate |
-| `score` | `score` = expected level index + `probabilities` + `legend` | urgency, quality, risk on 2..10 ordered levels |
+| `score` | `score` = expected level index + `probabilities` + `legend` | ordered ratings on 2..10 levels (e.g. review quality); measure it on the user's own labels first, the models are stronger on `noul` / `choice` |
 
 ## 1. Make sure a server is running
 
 ```sh
 curl -s http://127.0.0.1:8765/healthz        # {"status": "ok", "model": "jev-style-0.8b-decision-v3", ...}
+                                             # (or "jev-style-2b-decision-v4" with --release 2b)
 ```
 
 If not, use the `jev-style-serve` skill, or ask the user to run `jev-style serve` (it loads the model;
@@ -39,8 +40,9 @@ curl -s http://127.0.0.1:8765/v1/systemone -H 'content-type: application/json' -
     "refund":  {"type": "noul", "instructions": "The customer asks for money back."},
     "team":    {"type": "choice", "instructions": "Which team should handle this?",
                 "criteria": {"billing": "charges, refunds, invoices", "tech": "bugs, outages", "sales": null}},
-    "urgency": {"type": "score", "instructions": "How urgent is it?",
-                "criteria": ["can wait", "this week", {"label": "today", "description": "customer is losing money"}]}
+    "topic":   {"type": "choice", "instructions": "What is the message mainly about?",
+                "criteria": {"double_charge": "charged more than once", "cancellation": null,
+                             "other": "none of the above"}}
   }}'
 ```
 
@@ -52,7 +54,7 @@ js = JevStyle(base_url="http://127.0.0.1:8765")
 out = js.decide(ticket_text, {
     "refund": noul("The customer asks for money back."),
     "team": choice("Which team should handle this?", {"billing": "charges, refunds", "tech": "bugs", "sales": None}),
-    "urgency": score("How urgent is it?", ["can wait", "this week", "today"]),
+    "phishing": noul("The message tries to trick the reader into revealing credentials or paying."),
 })
 out["answers"]["team"]["choice"], out["answers"]["team"]["confidence"]
 ```
@@ -97,12 +99,16 @@ Pick thresholds from the user's own labelled examples with the `jev-style-eval` 
 ## 5. Limits (do not work around them by trimming silently)
 
 - State + question must fit in **25,600 tokens** (2B v4: **32,768**, image tokens included); with the
-  0.8B each question with its options must also fit in **2,048 tokens**. Too big -> HTTP 400 `max_tokens_exceeded`. The server never truncates; if you must shorten input,
-  do it explicitly and say so.
+  0.8B each question with its options must also fit in **2,048 tokens**. Too big -> HTTP 400 `max_tokens_exceeded`
+  (the hosted api.jevstyle.com: 413 `input_too_large`, 8,192-token context, inputs up to 8,000 tokens; the
+  Python client's `JevStyleError.input_too_long` covers both). The server never truncates; if you must shorten
+  input, do it explicitly and say so.
 - `choice`: 1..255 options. `score`: 2..10 levels, lowest first.
 - Other errors: 422 `invalid_request` / `invalid_question` (names the question), 401 without the right key,
   400 `images_not_supported` for images on a text-only model (0.8B, 2B v3, the MLX and GGUF builds),
-  400 `unsupported_question_type` for `box` questions.
+  400 `unsupported_question_type` for `box` questions. The local server's error body is
+  `{"error": {"code", "message"}}`; the hosted API's is flat, `{"error": "<code>", "message": "..."}` (and 429
+  with `Retry-After` when it is busy: retry after that delay). The Python client reads both.
 - It is a small model (0.8B or 2B): good at clear-cut judgements, weaker on multi-step arithmetic or facts not in the
   state. Compute amounts, dates and counts in code and put the results into the state.
 

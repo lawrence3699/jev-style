@@ -59,7 +59,7 @@ RT = types.SimpleNamespace(InputBudgetError=_BudgetError, QuestionError=_Questio
 
 
 def make(runtime):
-    return TestClient(create_app(Adapter(runtime, RT, "torch", model_id="jev-style-2b-decision-v4"))), runtime
+    return TestClient(create_app(Adapter(runtime, RT, "torch", model_id="jev-style-2b-decision-v4")), base_url="http://127.0.0.1"), runtime
 
 
 def body(state, assets, instructions="Is the door open in `photo`?"):

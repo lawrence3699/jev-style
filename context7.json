@@ -1,0 +1,24 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "JevStyle (jev-style)",
+  "description": "Local decision models for AI agents: classify, route and score with a probability per option. Python client, systemone-compatible local server, MCP tools and a Claude Code guard.",
+  "folders": [
+    "docs",
+    "examples",
+    "skills"
+  ],
+  "excludeFolders": [
+    "tests",
+    "space",
+    "space-2b",
+    "scripts",
+    "plugins"
+  ],
+  "rules": [
+    "Install a backend extra: pip install \"jev-style[mlx]\" on Apple silicon, or \"jev-style[torch]\" for CPU, CUDA and images; the bare package is only the client.",
+    "Start the local server with jev-style serve (http://127.0.0.1:8765); --release 2b selects Jev-Style-2B-Decision-v4.",
+    "Requests use POST /v1/systemone with a state and typed questions (noul, choice, score); every option gets a probability.",
+    "Images need 2B v4 on the PyTorch backend; MLX and GGUF builds are text-only.",
+    "Choose acceptance thresholds on held-out examples and keep a fallback for uncertain or failed requests."
+  ]
+}

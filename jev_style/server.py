@@ -9,6 +9,12 @@ Routes::
     /demos/<slug>/...       static files from web/demos/<slug>/
     /demo-data/<slug>/...   read-only demo data from web/demo-data/<slug>/
     /                       web/ (index.html = Playground, common.js, common.css)
+
+Cross-site requests are refused (403 ``forbidden_host`` / ``forbidden_origin``): by default the server answers
+only requests whose ``Host`` is a loopback name (plus the name it binds to, see ``jev-style serve --host``) and
+whose ``Origin``, when a browser sends one, is loopback or the same host. A web page on another site cannot use a
+local server as its API, with or without DNS rebinding; the Playground and apps on localhost are unaffected.
+``create_app(allowed_hosts=None)`` / ``jev-style serve --allow-any-host`` switch the check off.
 """
 from __future__ import annotations
 
@@ -16,7 +22,8 @@ import hmac
 import logging
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
+from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
@@ -31,6 +38,46 @@ from .schema import MAX_BODY_BYTES, ApiError, decode_body, parse_json
 
 log = logging.getLogger("jev_style.serve")
 DEMO_DATA_DIR = discovery.WEB_DIR / "demo-data"
+LOOPBACK_NAMES = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def header_host(value: str) -> str:
+    """The host name of a ``Host`` header (``name[:port]``, ``[v6]:port``) or of an ``Origin`` URL, lower-cased."""
+    v = (value or "").strip().lower()
+    if "://" in v:
+        try:
+            return urlparse(v).hostname or ""
+        except ValueError:
+            return ""
+    if v.startswith("["):
+        return v[1:v.index("]")] if "]" in v else v[1:]
+    return v.split(":", 1)[0]
+
+
+def _is_loopback(name: str) -> bool:
+    return name in LOOPBACK_NAMES or name.startswith("127.")
+
+
+def request_problem(host_header: str, origin_header: str | None, allowed: Any) -> tuple[str, str] | None:
+    """(code, message) when a request must be refused, else None. ``allowed``: None = accept anything;
+    ``"bound"`` = any Host (the server binds to every interface), but a browser ``Origin`` must be loopback or
+    the request's own host; a collection of names = the Host must be one of them (or loopback) and so must
+    the Origin."""
+    if allowed is None:
+        return None
+    host = header_host(host_header)
+    names = None if allowed == "bound" else {str(n).lower() for n in allowed}
+    if names is not None and not (host in names or _is_loopback(host)):
+        return ("forbidden_host", f"this server answers requests addressed to {', '.join(sorted(names))} only, "
+                                  f"not to {host!r} (jev-style serve --host NAME, or --allow-any-host)")
+    if origin_header is None:
+        return None
+    origin = header_host(origin_header)
+    if origin_header.strip().lower() == "null" or not origin:
+        return ("forbidden_origin", "requests from an opaque (null) origin are refused")
+    if origin == host or _is_loopback(origin) or (names is not None and origin in names):
+        return None
+    return ("forbidden_origin", f"cross-site requests from {origin!r} are refused: this is a local server")
 
 
 async def _read_body(request: Request) -> bytes:
@@ -57,12 +104,17 @@ class _Static(StaticFiles):
 
 def create_app(adapter: Adapter | Any, *, api_key: str | None = None, web_dir: Path = discovery.WEB_DIR,
                demos_dir: Path | None = None, demo_data_dir: Path = DEMO_DATA_DIR,
-               ext_dir: Path | None = discovery.EXT_DIR, ext_package: str = "jev_style.ext") -> FastAPI:
+               ext_dir: Path | None = discovery.EXT_DIR, ext_package: str = "jev_style.ext",
+               allowed_hosts: Iterable[str] | str | None = "loopback") -> FastAPI:
+    """``allowed_hosts``: the ``Host`` names this server answers to (see ``request_problem``): ``"loopback"``
+    (default: 127.0.0.1, localhost, ::1), ``"bound"`` (any Host, same-host or loopback Origin only), a collection
+    of names, or None to accept every request."""
     web_dir = Path(web_dir)
     demos_dir = Path(demos_dir) if demos_dir is not None else web_dir / "demos"
     app = FastAPI(title="Jev-Style local server", version=__version__, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.adapter = adapter
     app.state.api_key = api_key
+    app.state.allowed_hosts = set(LOOPBACK_NAMES) if allowed_hosts == "loopback" else allowed_hosts
 
     @app.exception_handler(ApiError)
     async def _api_error(_: Request, exc: ApiError):
@@ -86,6 +138,14 @@ def create_app(adapter: Adapter | Any, *, api_key: str | None = None, web_dir: P
         if request.url.path.startswith("/v1/"):
             response.headers["x-request-id"] = "req_" + uuid.uuid4().hex
         return response
+
+    @app.middleware("http")
+    async def _same_host(request: Request, call_next):
+        problem = request_problem(request.headers.get("host", ""), request.headers.get("origin"),
+                                  app.state.allowed_hosts)
+        if problem:
+            return JSONResponse({"error": {"code": problem[0], "message": problem[1]}}, status_code=403)
+        return await call_next(request)
 
     def require_auth(request: Request) -> None:
         key = app.state.api_key
@@ -145,12 +205,13 @@ def create_app(adapter: Adapter | Any, *, api_key: str | None = None, web_dir: P
 
 
 def build_app(backend: str = "auto", *, fake: bool = False, api_key: str | None = None, cascade: Any = None,
-              **load_kw: Any) -> FastAPI:
+              allowed_hosts: Iterable[str] | str | None = "loopback", **load_kw: Any) -> FastAPI:
     """Load the model (or the fake engine, or every tier of a cascade file) and return the app."""
     if cascade is not None:
         if fake:
             raise ValueError("cascade and fake cannot be combined (use 'fake' tier targets instead)")
         from .cascade import CascadeAdapter
-        return create_app(CascadeAdapter.from_config(cascade, backend=backend, **load_kw), api_key=api_key)
+        return create_app(CascadeAdapter.from_config(cascade, backend=backend, **load_kw), api_key=api_key,
+                          allowed_hosts=allowed_hosts)
     from .adapter import build_adapter
-    return create_app(build_adapter(backend, fake=fake, **load_kw), api_key=api_key)
+    return create_app(build_adapter(backend, fake=fake, **load_kw), api_key=api_key, allowed_hosts=allowed_hosts)
