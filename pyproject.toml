@@ -17,6 +17,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Operating System :: MacOS",
   "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
@@ -32,6 +33,9 @@ dependencies = [
 
 [project.optional-dependencies]
 torch = ["torch>=2.4", "transformers>=5.0", "pillow>=10", "torchvision>=0.19"]   # pillow + torchvision: the 2B v4 runtime (images)
+# mlx-lm is pinned on purpose: the 2B MLX runtimes patch mlx-lm and check the sha256 of the source they patch, so they
+# refuse any other mlx-lm version (see jev_style/models.py). Install into its own venv (or `uv tool install`) when
+# other MLX tools in the same environment need a newer mlx-lm.
 mlx = ["mlx>=0.29; sys_platform == 'darwin'", "mlx-lm==0.31.3; sys_platform == 'darwin'"]
 mcp = []                                  # kept so jev-style[mcp] still resolves; mcp is a core dependency since 0.3.0
 all = ["jev-style[torch,mlx,mcp]"]
@@ -45,7 +49,8 @@ Homepage = "https://jevstyle.com"
 Repository = "https://github.com/lawrence3699/jev-style"
 Changelog = "https://github.com/lawrence3699/jev-style/blob/main/CHANGELOG.md"
 Issues = "https://github.com/lawrence3699/jev-style/issues"
-Models = "https://huggingface.co/collections/chaoliangUNSW/jev-style-decision-v4-2b"
+Models = "https://huggingface.co/chaoliangUNSW"
+Discussions = "https://github.com/lawrence3699/jev-style/discussions"
 
 [build-system]
 requires = ["hatchling"]

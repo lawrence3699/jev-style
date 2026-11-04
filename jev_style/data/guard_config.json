@@ -10,11 +10,11 @@
   "emit_allow": false,
   "_emit_allow": "false = an 'allow' verdict prints nothing, so Claude Code's normal permission prompts still apply. true = the guard auto-approves calls it judges safe.",
   "on_error": "ask",
-  "_on_error": "Verdict when the server is down, times out, or rejects the request: 'ask' or 'deny' (never 'allow').",
+  "_on_error": "Verdict when the server is down, times out, rejects the request, or answers without a usable value for every question: 'ask' or 'deny' (never 'allow').",
   "log_path": "~/.local/state/jev-style-guard/guard.jsonl",
   "log_preview_chars": 300,
   "max_field_chars": 0,
-  "_max_field_chars": "0 (default) = never shorten: the whole call is sent, and a call too big for the model's 25,600-token context comes back as max_tokens_exceeded, which becomes 'ask'. A positive value shortens longer strings with a visible marker, and any shortened call is raised to at least 'ask' because the model did not see all of it.",
+  "_max_field_chars": "0 (default) = never shorten: the whole call is sent, and a call too big for the model's context (25,600 tokens for the 0.8B, 32,768 for the 2B v4) comes back as max_tokens_exceeded, which becomes 'ask'. A positive value shortens longer strings with a visible marker, and any shortened call is raised to at least 'ask' because the model did not see all of it.",
   "drop_fields": {
     "Bash": [
       "description"

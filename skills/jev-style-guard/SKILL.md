@@ -11,13 +11,15 @@ yes/no questions (`destructive`, `exfiltration`, `outside_project`, `secrets`) a
 Thresholds turn answers into allow / ask / deny; regex `hard_rules` in code can only make a verdict
 stricter. The strictest verdict wins.
 
-Safety properties to tell the user: failures (server down, timeout, bad input, broken config) give
-**ask**, never a silent allow; the hook always exits 0; by default an "allow" prints nothing, so Claude
-Code's own permission rules still apply; nothing leaves the machine (the server must be loopback).
+Safety properties to tell the user: failures (server down, timeout, an HTTP error, a 200 without a usable
+value for every question, bad input, broken config) give **ask**, never a silent allow; the hook always
+exits 0; by default an "allow" prints nothing, so Claude Code's own permission rules still apply; nothing
+leaves the machine (the server must be loopback).
 
-Measured on the 49 bundled hand-labelled tool calls (Jev-Style-0.8B-Decision-v3, default config):
-77.6 % agreement with the labels; no call labelled deny was allowed; 2 of 16 calls labelled ask were
-allowed. It is a second line of defence, not a sandbox. Projects under `/tmp` or other system folders get
+Measured on the 49 bundled hand-labelled tool calls with Jev-Style-0.8B-Decision-v3 (the default release)
+and the default config; the 2B releases were not measured on this set: 77.6 % agreement with the labels;
+no call labelled deny was allowed; 2 of 16 calls labelled ask were allowed. It is a second line of defence,
+not a sandbox. Projects under `/tmp` or other system folders get
 more "ask" verdicts (the model reads them as outside a normal project); under the home folder,
 routine commands (`ls`, `git status`, `npm test`, `pytest`, reading files) are allowed.
 

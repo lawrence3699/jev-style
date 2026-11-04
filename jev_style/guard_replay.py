@@ -126,7 +126,8 @@ def render(summary: Dict[str, Any], rows, results, verbose: bool) -> str:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(prog="jev-style guard-replay", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     src = ap.add_mutually_exclusive_group()
     src.add_argument("--fake", action="store_true", help="in-process fake engine (default)")
     src.add_argument("--url", help="running Jev-Style server, e.g. http://127.0.0.1:8765")

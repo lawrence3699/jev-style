@@ -146,6 +146,27 @@ def release_keys(published_only: bool = True) -> list[str]:
     return keys + [a for a, k in ALIASES.items() if k in keys]
 
 
+def env_release_problem() -> str | None:
+    """Why ``$JEV_STYLE_RELEASE`` cannot be used, or None (unset, or a release this version offers). Checked
+    before argument parsing, so a typo in the variable is one clear line instead of a traceback later."""
+    raw = os.environ.get("JEV_STYLE_RELEASE")
+    if not raw:
+        return None
+    key = ALIASES.get(raw.strip().lower(), raw.strip().lower())
+    if key not in RELEASES:
+        return (f"JEV_STYLE_RELEASE={raw!r} is not a release this version of jev-style knows; "
+                f"use one of {', '.join(release_keys())} (or unset it)")
+    if not RELEASES[key].published:
+        return f"JEV_STYLE_RELEASE={raw!r} names a release that is not published in this version of jev-style"
+    return None
+
+
+def env_release(default: str = DEFAULT_RELEASE) -> str:
+    """``$JEV_STYLE_RELEASE`` as a ``--release`` choice (case and alias normalised), else ``default``."""
+    raw = (os.environ.get("JEV_STYLE_RELEASE") or "").strip().lower()
+    return raw if raw and env_release_problem() is None else default
+
+
 def get_release(key: str | None = None) -> Release:
     key = key or os.environ.get("JEV_STYLE_RELEASE") or DEFAULT_RELEASE
     key = ALIASES.get(key.lower(), key.lower())
@@ -179,6 +200,19 @@ class MissingBackendError(ImportError):
     """The chosen backend's Python packages are not installed (raised before any download)."""
 
 
+class MissingScorerError(MissingBackendError):
+    """The GGUF backend's scorer binary cannot be found and the weights are not downloaded yet (raised before
+    the download, so the first run does not fetch 1-4 GB only to stop on this)."""
+
+
+class DownloadError(RuntimeError):
+    """The Hub download failed (network, offline mode, a missing or private repo): the message says what to do."""
+
+
+class VerifyError(RuntimeError):
+    """A downloaded file does not match the repo's ``manifest.json`` (size or sha256)."""
+
+
 _BACKEND_MODULES = {"torch": ("torch", "transformers"), "mlx": ("mlx", "mlx_lm"), "gguf": ()}
 
 
@@ -209,6 +243,10 @@ def require_backend(backend: str | Build) -> None:
     if not problem:
         return
     b = build.backend
+    if b == "mlx" and not is_apple_silicon():
+        raise MissingBackendError(
+            f"the mlx backend of {build.repo} only runs on Apple silicon (the [mlx] extra installs nothing on "
+            f"other machines). Use --backend torch: pip install \"jev-style[torch]\" (CUDA, CPU or Apple MPS).")
     if b == "mlx":
         hint = 'pip install "jev-style[mlx]"'
     elif is_apple_silicon():
@@ -218,6 +256,62 @@ def require_backend(backend: str | Build) -> None:
     raise MissingBackendError(
         f"the {b} backend of {build.repo} {problem}. The bare `pip install jev-style` is only the client; to run the "
         f"model locally: {hint}. The gguf backend needs no extra, only the release's scorer (see the GGUF card).")
+
+
+def find_scorer(build: Build, scorer: str | None = None, folder: Path | None = None) -> str | None:
+    """Where the GGUF build's scorer binary is, or None: ``scorer`` (``--scorer``), the release's environment
+    variable (``$JEV_SCORE_BIN`` / ``$JEV_SCORE_V2_BIN``), ``<folder>/build/<binary>`` (where
+    ``build_jev_score.sh`` puts it) or the binary on PATH. The same places the runtime looks, checked before any
+    download."""
+    import shutil
+    if scorer:
+        return scorer
+    env, name = build.extra.get("scorer_env"), build.extra.get("scorer_bin")
+    if env and os.environ.get(env):
+        return os.environ[env]
+    if folder is not None and name:
+        for candidate in (Path(folder) / "build" / name, Path(folder) / "build" / f"{name}.exe"):
+            if candidate.is_file():
+                return str(candidate)
+    return shutil.which(name) if name else None
+
+
+def cached_folder(build: Build, precision: str = "bf16", quant: str = "Q8_0",
+                  revision: str | None = None) -> Path | None:
+    """The cached snapshot folder with every file the build needs, or None (no network)."""
+    from huggingface_hub import snapshot_download
+    rev = revision or build.revision
+    if not rev:
+        return None
+    pats = patterns_for(build, precision, quant)
+    try:
+        folder = Path(snapshot_download(build.repo, revision=rev, allow_patterns=pats, local_files_only=True))
+    except Exception:  # noqa: BLE001 - not cached (or partly)
+        return None
+    return folder if cached_complete(folder, pats) else None
+
+
+def require_scorer(build: Build, scorer: str | None = None, *, precision: str = "bf16", quant: str = "Q8_0",
+                   revision: str | None = None) -> None:
+    """GGUF: refuse to start the download when no scorer binary can be found anywhere and the pinned files are
+    not cached yet. The runtime looks the binary up itself once the files are there (a scorer built inside the
+    model folder is found then), so a cached snapshot passes."""
+    if build.backend != "gguf" or build.release == "custom":
+        return
+    folder = cached_folder(build, precision, quant, revision)
+    if folder is not None or find_scorer(build, scorer, folder) is not None:
+        return
+    name, env, src = build.extra.get("scorer_bin"), build.extra.get("scorer_env"), None
+    for pat in build.patterns:
+        if pat.startswith("jev_score") and pat.endswith(".cpp"):
+            src = pat
+    rel = build.release
+    raise MissingScorerError(
+        f"the gguf backend of {build.repo} needs the {name} scorer binary, built once from {src} against llama.cpp, "
+        f"and none was found (--scorer PATH, ${env}, or {name} on PATH). Download the files first: "
+        f"`jev-style download --backend gguf --release {rel}` prints the model folder; run "
+        f"`sh build_jev_score.sh /path/to/llama.cpp` there, then start again with --scorer <the path it prints> "
+        f"(see the GGUF model card).")
 
 
 def build_for_repo(repo: str, *, trust_remote_code: bool = False) -> Build:
@@ -232,7 +326,21 @@ def build_for_repo(repo: str, *, trust_remote_code: bool = False) -> Build:
                          "Python runtime file it ships; pass trust_remote_code=True if you trust it.")
     tail = repo.rsplit("/", 1)[-1].lower()
     backend = "gguf" if "gguf" in tail else "mlx" if "mlx" in tail else "torch"
-    return replace(BUILDS[backend], repo=repo, revision=None, release="custom")
+    # Not one of the pinned repos, so its file layout is unknown: take every runtime file, config and weights file
+    # the three layouts use (sharded safetensors, an MLX precision folder, a GGUF quant), not the 0.8B's names.
+    base = BUILDS[backend]
+    return replace(base, repo=repo, revision=None, release="custom", patterns=_CUSTOM_PATTERNS[backend],
+                   extra={**base.extra, **_CUSTOM_EXTRA.get(backend, {})})
+
+
+_CUSTOM_PATTERNS: dict[str, tuple[str, ...]] = {
+    "torch": _COMMON + ("*.py", "*.json", "*.jinja", "*.txt", "*.safetensors", "src/**"),
+    "mlx": _COMMON + ("*.py", "*.json", "*.md", "*.txt"),                    # + "{precision}/*"
+    "gguf": _COMMON + ("*.py", "*.cpp", "*.sh", "*.txt", "tokenizer/*"),      # + "*-{quant}.gguf"
+}
+_CUSTOM_EXTRA: dict[str, dict[str, Any]] = {
+    "gguf": {"quant_file": "*-{quant}.gguf", "scorer_bin": None, "scorer_env": None},
+}
 
 
 def patterns_for(build: Build, precision: str = "bf16", quant: str = "Q8_0") -> list[str]:
@@ -246,23 +354,97 @@ def patterns_for(build: Build, precision: str = "bf16", quant: str = "Q8_0") -> 
 
 def download(backend: str = "auto", *, precision: str = "bf16", quant: str = "Q8_0",
              revision: str | None = None, build: Build | None = None, release: str | None = None,
-             trust_remote_code: bool = False) -> Path:
-    """Download (or reuse from the HF cache) the files one backend needs. Returns the local folder."""
+             trust_remote_code: bool = False, check_backend: bool = True, verify: bool = False) -> Path:
+    """Download (or reuse from the HF cache) the files one backend needs. Returns the local folder.
+
+    ``check_backend`` (default on) refuses, before anything is fetched, a backend whose Python packages are not
+    installed (``MissingBackendError``): the bare install cannot run the weights it would download. ``verify``
+    checks every downloaded file's size and sha256 against the repo's ``manifest.json`` (``VerifyError``). A
+    failed download raises ``DownloadError`` with what to do instead of the Hub client's traceback."""
     from huggingface_hub import snapshot_download
 
     build = build or get_release(release).builds[resolve_backend(backend, release)]
+    if check_backend:
+        require_backend(build)
     if not (revision or build.revision) and not trust_remote_code:
         raise ValueError(f"{build.repo} has no pinned revision in jev-style {_version()} (release "
                          f"{build.release} is not published in this version). Upgrade jev-style, pass a local "
                          "model_dir, or pass trust_remote_code=True to load the repo's main branch.")
     kw = dict(revision=revision or build.revision, allow_patterns=patterns_for(build, precision, quant))
+    folder = None
     try:                                   # pinned revision already cached: no network round trip
-        folder = Path(snapshot_download(build.repo, local_files_only=True, **kw))
-        if cached_complete(folder, kw["allow_patterns"]):
-            return folder
+        cached = Path(snapshot_download(build.repo, local_files_only=True, **kw))
+        if cached_complete(cached, kw["allow_patterns"]):
+            folder = cached
     except Exception:  # noqa: BLE001 - not cached (or partly): download
         pass
-    return Path(snapshot_download(build.repo, **kw))
+    if folder is None:
+        try:
+            folder = Path(snapshot_download(build.repo, **kw))
+        except (OSError, ValueError) as e:     # HfHubHTTPError, LocalEntryNotFoundError, OfflineModeIsEnabled ...
+            raise DownloadError(_download_problem(build, kw["revision"], e)) from None
+    if verify:
+        verify_folder(folder, kw["allow_patterns"])
+    return folder
+
+
+def _download_problem(build: Build, revision: str | None, exc: BaseException) -> str:
+    reason = f"{type(exc).__name__}: {exc}".replace("\n", " ").strip()
+    if len(reason) > 300:
+        reason = reason[:300] + "..."
+    offline = os.environ.get("HF_HUB_OFFLINE", "").strip().lower() in ("1", "true", "yes", "on")
+    hint = ("HF_HUB_OFFLINE is set, so nothing is fetched: unset it, or use a local copy with --model-dir." if offline
+            else "Check the network connection and any proxy (HF_ENDPOINT / HTTPS_PROXY); if the repo is private, "
+                 "log in with `hf auth login`; a local copy can be used with --model-dir.")
+    rev = f" (revision {revision[:12]})" if revision else ""
+    return f"could not download {build.repo}{rev}: {reason}. {hint}"
+
+
+def manifest_entries(folder: Path) -> dict[str, dict]:
+    """``manifest.json`` of a model folder as {relative path: {"sha256", "bytes"}} (the jev-style-manifest-v1
+    format every release ships), or {} when the folder has none."""
+    import json
+    try:
+        files = json.loads((Path(folder) / "manifest.json").read_text(encoding="utf-8")).get("files")
+    except (OSError, ValueError, AttributeError):
+        return {}
+    if isinstance(files, dict):
+        return {str(k): v for k, v in files.items() if isinstance(v, dict)}
+    if isinstance(files, list):            # older manifests: a list of names, nothing to compare against
+        return {str(n): {} for n in files}
+    return {}
+
+
+def verify_folder(folder: str | Path, patterns: list[str] | None = None) -> list[str]:
+    """Check the files ``patterns`` select (default: all) against the folder's ``manifest.json``: present,
+    the right size and the right sha256. Returns the names checked; raises ``VerifyError`` on the first
+    mismatch, or when the folder has no manifest to check against."""
+    import fnmatch
+    import hashlib
+    folder = Path(folder)
+    entries = manifest_entries(folder)
+    if not entries:
+        raise VerifyError(f"{folder} has no manifest.json to verify against")
+    names = [n for n in entries if patterns is None or any(fnmatch.fnmatchcase(n, p) for p in patterns)]
+    names = [n for n in names if n != "manifest.json"]
+    if not names:
+        raise VerifyError(f"{folder}: the manifest lists none of the files this build uses")
+    checked = []
+    for name in names:
+        want, path = entries[name], folder / name
+        if not path.is_file():
+            raise VerifyError(f"{folder}: {name} is missing")
+        if want.get("bytes") is not None and path.stat().st_size != int(want["bytes"]):
+            raise VerifyError(f"{folder}: {name} is {path.stat().st_size} bytes, the manifest says {want['bytes']}")
+        if want.get("sha256"):
+            h = hashlib.sha256()
+            with open(path, "rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b""):
+                    h.update(chunk)
+            if h.hexdigest() != str(want["sha256"]).lower():
+                raise VerifyError(f"{folder}: {name} does not match the manifest's sha256")
+        checked.append(name)
+    return checked
 
 
 def cached_complete(folder: Path, patterns: list[str]) -> bool:
@@ -310,9 +492,14 @@ def load_release(backend: str = "auto", *, release: str | None = None, model_dir
         build = get_release(release).builds[resolve_backend(backend, release)]
     backend = build.backend
     require_backend(build)
-    folder = Path(model_dir).expanduser() if model_dir else download(
-        backend, precision=precision, quant=quant, revision=revision, build=build,
-        trust_remote_code=trust_remote_code)
+    if model_dir:
+        folder = Path(model_dir).expanduser()
+        if not folder.is_dir():
+            raise FileNotFoundError(f"model_dir {folder} is not a directory")
+    else:
+        require_scorer(build, scorer, precision=precision, quant=quant, revision=revision)
+        folder = download(backend, precision=precision, quant=quant, revision=revision, build=build,
+                          trust_remote_code=trust_remote_code, check_backend=False)
     rt = import_runtime(folder, build.module)
     cls = getattr(rt, build.cls)
     if backend == "torch":

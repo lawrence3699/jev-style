@@ -7,7 +7,8 @@
 2. `uv run pytest -q`, then merge to `main`.
 3. `git tag -a vX.Y.Z -m "jev-style X.Y.Z" && git push origin vX.Y.Z`. The `release` workflow checks that the tag
    equals `__version__`, runs the tests, builds, checks the metadata, installs the wheel in a clean venv and
-   publishes to PyPI through Trusted Publishing (environment `pypi`; no token).
+   publishes to PyPI through Trusted Publishing (environment `pypi`; no token). Only a tag publishes to PyPI;
+   "Run workflow" by hand publishes to TestPyPI only.
    After the PyPI job, the `mcp-registry` job waits until PyPI serves the version, sets it in `server.json` from the
    tag and publishes to the MCP Registry (GitHub OIDC). The registry checks that the PyPI README contains
    `<!-- mcp-name: io.github.lawrence3699/jev-style -->`, so keep that line in `README.md`.

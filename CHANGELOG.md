@@ -3,6 +3,66 @@
 Versions follow [semantic versioning](https://semver.org/). Each release pins the model revisions it loads
 (`jev_style/models.py`), so upgrading the package is what changes the weights you get.
 
+## 0.6.4 (unreleased)
+
+Fixes from the 2026-11-05 review of the package. Model revisions and weights are unchanged from 0.6.0.
+
+- **Error bodies of both shapes.** The hosted `api.jevstyle.com` answers `{"error": "<code>", "message": "..."}`
+  and reports over-long input as `413 input_too_large`, while this package's server answers the nested
+  `{"error": {"code", "message"}}` and `400 max_tokens_exceeded`. The Python client (`parse_error_body`), the
+  guard and the MCP server now read both; the client used to report `http_error: unauthorized` and the guard and
+  MCP server crashed with `AttributeError` on a flat body. `JevStyleError.input_too_long` is true for
+  `max_tokens_exceeded`, `input_too_large` and the pre-0.5.0 `input_budget_exceeded`.
+- **Guard: a 200 without usable answers is "ask".** A response with no answer, a wrong answer type or no number
+  for any of the five questions was treated as "no concern" and, with `emit_allow`, auto-approved. It is now an
+  error (`on_error`, "ask"), like a server failure. The request no longer names a `model` (servers ignore it).
+  `apply_thresholds` returns the `missing` questions. New tests cover thresholds, `emit_allow`, HTTP error
+  bodies of both shapes and malformed 200 responses, through a real local stub server.
+- **Guard and MCP server: no key or state to the wrong place.** `JEV_STYLE_API_KEY` is sent only to loopback
+  servers and to the server named in `JEV_STYLE_URL`; any other `base_url` (eval `--server`, a cascade http
+  tier, `--url`) needs an explicit key. The MCP server's instructions are built per backend: the served model's
+  context and per-question budgets come from `GET /v1/models` (the text used to say 25,600 / 2,048 for every
+  model), and with `--allow-remote --url` they say that every state goes to that server instead of
+  "nothing is sent elsewhere".
+- **Local server: cross-site requests refused.** `jev-style serve` answers only requests whose `Host` is a
+  loopback name or its `--host`, and refuses browser requests whose `Origin` is another site (403
+  `forbidden_host` / `forbidden_origin`), so a web page elsewhere cannot use the local model (also under DNS
+  rebinding). `--allow-any-host` and `create_app(allowed_hosts=None)` switch it off; with `--host 0.0.0.0` any
+  Host is accepted but the Origin must still be the same host or loopback. Tests that build a `TestClient`
+  now address it as `http://127.0.0.1`.
+- **Downloads fail early and clearly.** `jev-style download` (and `models.download`) checks the backend's
+  packages first, so a bare install no longer fetches 1.5-4.4 GB of weights it cannot run
+  (`--no-backend-check` to download anyway); the GGUF backend refuses to start a download while no scorer
+  binary can be found (`--scorer`, `$JEV_SCORE_BIN` / `$JEV_SCORE_V2_BIN`, `build/` in a cached snapshot, or
+  PATH) and says how to get one; a failed download is one `error:` line (`DownloadError`) naming the repo,
+  the reason and what to do (`HF_HUB_OFFLINE`, network, `--model-dir`) instead of a traceback; a missing
+  `--model-dir` is `error: file not found`. `JEV_STYLE_RELEASE` is checked before argument parsing (one line
+  instead of a traceback; `2B` is accepted for `2b`). `--backend mlx` on a machine that is not Apple silicon
+  says so and points at `[torch]` instead of suggesting the `[mlx]` extra that installs nothing there.
+- **Integrity check from the CLI.** `jev-style download` verifies every file against the repo's
+  `manifest.json` (sizes and sha256; `--no-verify` skips it), and `serve` / `decide --verify` pass `verify=True`
+  to the runtime; `models.verify_folder()` does the check on any model folder.
+- **`trust_remote_code` repos get a generic file list.** A repo this package does not pin used to be
+  downloaded with the 0.8B v3's file names (one `model.safetensors`, `bf16/*`, or
+  `Jev-Style-0.8B-Decision-v3-<quant>.gguf`), so a 2B fork or an experiment repo failed after the metadata
+  download; custom repos now take every runtime file, config, safetensors shard, `src/**`, MLX precision folder
+  or `*-<quant>.gguf` they contain.
+- **CLI help.** `jev-style --help` lists `eval`, `guard`, `guard-replay` and `mcp` with the other commands, and
+  `jev-style guard --help` / `guard-replay --help` show their own name in the usage line.
+- **Release workflow.** A manual run can publish to TestPyPI only; PyPI releases come from a `vX.Y.Z` tag, which is
+  checked against `__version__` first. `server.json` describes the current models (2B v4 and 0.8B, text and
+  images). CI runs the test suite and the fake-engine CLI on Windows as well, and the package declares Windows.
+- **Metadata and documentation.** `NOTICE` lists the 2B v3 and 2B v4 sources (Qwen3.5-2B derivatives; v4 with
+  Jev 1.14 soft labels) next to the 0.8B. The `Models` link points at the Hub profile (the v4 collection has no
+  0.8B). The README gives the Decision Index 0.3 board entry (2B v4 listed 2026-11-04: Public 44.37, Full 34.53,
+  Breadth 41.75; Vision 57.55 / 51.94; 0.8B v3 17.0 / 12.5) instead of "self-run, v3 34.05 on the board", the
+  hosted API's context (8,192 tokens, 8,000-token inputs) and 429 / `Retry-After` behaviour, the `[mlx]`
+  pin, the key rule, the error shapes, and `noul` / `choice` examples in place of the urgency `score` ones. The
+  serve, mcp and jev-style skills cover `--release 2b` (2B v4), the per-release GGUF scorers, a `model` field that
+  starts with `jev-style-`, and drop the pre-0.3.0 "mcp extra" advice; the guard numbers are marked as measured
+  with the 0.8B v3. New `SECURITY.md` (private reports), `CODE_OF_CONDUCT.md`, a pull request template, and
+  GitHub Discussions as the place for questions.
+
 ## 0.6.3 (2026-11-02)
 
 Documentation-only release: clarify the official local installation, separate local inference from hosted API and third-party Jev services, place the 2B v4 teacher-label provenance alongside the independence statement, and link the dated/live service-status source and reproducible routing comparison. PyPI now serves the same corrected README as the repository. Model revisions, dependencies, inference behavior and weights are unchanged from 0.6.2.

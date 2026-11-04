@@ -21,13 +21,19 @@ import sys
 from typing import Any
 
 from . import __version__
-from .models import BACKENDS, DEFAULT_RELEASE, release_keys
+from .models import BACKENDS, DEFAULT_RELEASE, env_release, env_release_problem, release_keys
 
 DEFAULT_PORT = 8765
+OTHER_COMMANDS = {                      # parsed by their own modules (see _main); listed here for --help
+    "eval": "accuracy, calibration and automation rate on your labelled JSONL",
+    "guard": "Claude Code PreToolUse hook (allow / ask / deny)",
+    "guard-replay": "score the guard on labelled tool calls",
+    "mcp": "MCP server (stdio) for Claude Code, Cursor, Codex ...",
+}
 
 
 def _release_arg(ap: argparse.ArgumentParser) -> None:
-    ap.add_argument("--release", default=os.environ.get("JEV_STYLE_RELEASE", DEFAULT_RELEASE), choices=release_keys(),
+    ap.add_argument("--release", default=env_release(), choices=release_keys(),
                     help=f"which model to load (default $JEV_STYLE_RELEASE or {DEFAULT_RELEASE})")
 
 
@@ -48,6 +54,8 @@ def _model_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--quant", default="Q8_0", choices=("F16", "Q8_0", "Q4_K_M"), help="gguf file")
     ap.add_argument("--scorer", help="gguf backend: path to the release's scorer binary (0.8b-v3: jev-score, default "
                                       "$JEV_SCORE_BIN; 2b-v3 / 2b-v4: jev-score-v2, default $JEV_SCORE_V2_BIN)")
+    ap.add_argument("--verify", action="store_true",
+                    help="check the model files against the repo's manifest (sizes and sha256) before loading")
     ap.add_argument("--fake", action="store_true", help="deterministic fake engine, no model (tests / UI work)")
     ap.add_argument("--cascade", metavar="NAME_OR_FILE",
                     help="a confidence cascade: a name from `jev-style releases` (e.g. cascade-9b) or a cascade file. "
@@ -61,7 +69,8 @@ def _cuda_graphs(args: argparse.Namespace) -> bool | None:
 
 def _load_kw(args: argparse.Namespace) -> dict[str, Any]:
     return {"release": args.release, "model_dir": args.model_dir, "device": args.device, "dtype": args.dtype,
-            "precision": args.precision, "quant": args.quant, "scorer": args.scorer, "cuda_graphs": _cuda_graphs(args)}
+            "precision": args.precision, "quant": args.quant, "scorer": args.scorer, "cuda_graphs": _cuda_graphs(args),
+            "verify": bool(getattr(args, "verify", False))}
 
 
 def _tier_kw(args: argparse.Namespace) -> dict[str, Any]:
@@ -95,12 +104,14 @@ def cmd_serve(args: argparse.Namespace) -> int:
         print(f"error: {conflict}", file=sys.stderr)
         return 2
     from .server import build_app
+    hosts = None if args.allow_any_host else allowed_hosts_for(args.host)
     if args.cascade:
         print(f"loading the cascade {args.cascade} (the first run downloads its models) ...", flush=True)
-        app = build_app(args.backend, api_key=api_key, cascade=args.cascade, **_tier_kw(args))
+        app = build_app(args.backend, api_key=api_key, cascade=args.cascade, allowed_hosts=hosts, **_tier_kw(args))
     else:
         print("loading the model (the first run downloads it) ..." if not args.fake else "fake engine", flush=True)
-        app = build_app(args.backend, fake=args.fake, api_key=api_key, **({} if args.fake else _load_kw(args)))
+        app = build_app(args.backend, fake=args.fake, api_key=api_key, allowed_hosts=hosts,
+                        **({} if args.fake else _load_kw(args)))
     a = app.state.adapter
     print(f"Jev-Style server: model={a.model_id} backend={a.backend} context={a.max_len} "
           f"auth={'on' if api_key else 'off'} -> http://{args.host}:{args.port}/", flush=True)
@@ -113,6 +124,17 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def allowed_hosts_for(bind_host: str) -> set[str] | str:
+    """The ``Host`` names the server answers to: the loopback names plus the one it binds to. Bound to every
+    interface, its public names are unknown here, so any Host is taken but a browser Origin must still be the
+    same host or loopback (``"bound"``, see ``jev_style.server.request_problem``)."""
+    from .server import LOOPBACK_NAMES
+    h = (bind_host or "").strip().strip("[]").lower()
+    if h in ("", "0.0.0.0", "::", "*"):
+        return "bound"
+    return set(LOOPBACK_NAMES) | {h}
+
+
 def cmd_download(args: argparse.Namespace) -> int:
     if args.cascade:
         from .cascade import download_tiers
@@ -121,8 +143,18 @@ def cmd_download(args: argparse.Namespace) -> int:
             where = folder if folder is not None else f"nothing to download ({tier.target})"
             print(f"{tier.name}\t{where}", flush=True)
         return 0
-    from .models import download
-    print(download(args.backend, precision=args.precision, quant=args.quant, release=args.release))
+    from .models import download, get_release, resolve_backend
+    backend = resolve_backend(args.backend, args.release)
+    build = get_release(args.release).builds[backend]
+    folder = download(backend, precision=args.precision, quant=args.quant, release=args.release,
+                      check_backend=not args.no_backend_check, verify=args.verify)
+    print(folder)
+    if args.verify:
+        print("verified against manifest.json (sizes and sha256)", file=sys.stderr)
+    if backend == "gguf":
+        print(f"gguf: build the {build.extra['scorer_bin']} scorer once with `sh build_jev_score.sh /path/to/llama.cpp` "
+              f"in that folder, then start with --scorer <the path it prints> (or set ${build.extra['scorer_env']})",
+              file=sys.stderr)
     return 0
 
 
@@ -213,11 +245,18 @@ def cmd_guard(argv: list[str]) -> int:
 def main(argv: list[str] | None = None) -> int:
     from .cascade import CascadeConfigError
     from .jevk5_engine import JevK5LoadError
-    from .models import MissingBackendError
+    from .models import DownloadError, MissingBackendError, VerifyError
+    problem = env_release_problem()
+    if problem:
+        print(f"error: {problem}", file=sys.stderr)
+        return 2
     try:
         return _main(argv)
-    except (MissingBackendError, CascadeConfigError, JevK5LoadError) as e:
+    except (MissingBackendError, CascadeConfigError, JevK5LoadError, DownloadError, VerifyError) as e:
         print(f"error: {e}", file=sys.stderr)
+        return 2
+    except FileNotFoundError as e:     # a --model-dir / --examples / data path that is not there, or incomplete
+        print(f"error: file not found: {e}", file=sys.stderr)
         return 2
 
 
@@ -237,7 +276,8 @@ def _main(argv: list[str] | None = None) -> int:
         return mcp(argv[1:])
 
     ap = argparse.ArgumentParser(prog="jev-style", description="Small, calibrated, local decision models.",
-                                 epilog="also: jev-style eval | guard | guard-replay | mcp  (each has its own --help)")
+                                 epilog="eval, guard, guard-replay and mcp have their own options: "
+                                        "jev-style <command> --help")
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
@@ -247,6 +287,9 @@ def _main(argv: list[str] | None = None) -> int:
     s.add_argument("--port", type=int, default=int(os.environ.get("JEV_STYLE_PORT", DEFAULT_PORT)),
                    help=f"default $JEV_STYLE_PORT or {DEFAULT_PORT}")
     s.add_argument("--api-key-env", metavar="NAME", help="require 'Authorization: Bearer <key>', key from env NAME")
+    s.add_argument("--allow-any-host", action="store_true",
+                   help="answer requests for any Host and from any Origin (default: loopback names and --host only, "
+                        "which keeps web pages on other sites from using this server)")
     s.set_defaults(func=cmd_serve)
 
     d = sub.add_parser("download", help="download the weights for a backend")
@@ -257,6 +300,11 @@ def _main(argv: list[str] | None = None) -> int:
     d.add_argument("--cascade", metavar="NAME_OR_FILE",
                    help="download every tier of a cascade instead (--release does not apply; --backend, --precision, "
                         "--quant are defaults for local tiers)")
+    d.add_argument("--verify", dest="verify", action="store_true", default=True,
+                   help="check the files against the repo's manifest after the download (default)")
+    d.add_argument("--no-verify", dest="verify", action="store_false", help="skip that check")
+    d.add_argument("--no-backend-check", action="store_true",
+                   help="download even when this install cannot run the backend (e.g. to copy the files elsewhere)")
     d.set_defaults(func=cmd_download)
 
     r = sub.add_parser("releases", help="list the model releases and named cascades this version pins")
@@ -272,6 +320,9 @@ def _main(argv: list[str] | None = None) -> int:
     q.add_argument("--url", help="use a running server instead of loading the model ($JEV_STYLE_URL)")
     _model_args(q)
     q.set_defaults(func=cmd_decide)
+
+    for name, help_text in OTHER_COMMANDS.items():       # dispatched above; here so --help lists them
+        sub.add_parser(name, help=help_text, add_help=False)
 
     args = ap.parse_args(argv)
     return args.func(args)
