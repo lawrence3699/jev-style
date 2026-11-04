@@ -246,7 +246,10 @@ def main(argv: list[str] | None = None) -> int:
     from .cascade import CascadeConfigError
     from .jevk5_engine import JevK5LoadError
     from .models import DownloadError, MissingBackendError, VerifyError
-    problem = env_release_problem()
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # The guard is a Claude Code hook: it never loads a model and must exit 0 whatever the environment holds (a
+    # bad JEV_STYLE_RELEASE would otherwise turn every tool call into a blocking hook error).
+    problem = None if argv[:1] == ["guard"] else env_release_problem()
     if problem:
         print(f"error: {problem}", file=sys.stderr)
         return 2

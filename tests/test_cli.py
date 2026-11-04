@@ -73,3 +73,11 @@ def test_env_release_is_checked_first(monkeypatch, capsys):
     from jev_style.models import env_release
     assert env_release() == "2b"
     assert main(["releases"]) == 0
+
+
+def test_guard_hook_ignores_a_bad_env_release(monkeypatch, capsys):
+    monkeypatch.setenv("JEV_STYLE_RELEASE", "9b")
+    monkeypatch.setenv("JEV_STYLE_URL", "http://127.0.0.1:9")      # nothing listens there: the verdict is "ask"
+    assert main(["guard", "--check", "ls"]) == 0                   # a hook: never a non-zero exit for the env
+    out = capsys.readouterr()
+    assert "ASK" in out.out and "JEV_STYLE_RELEASE" not in out.err

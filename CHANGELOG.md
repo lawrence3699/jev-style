@@ -37,7 +37,7 @@ Fixes from the 2026-11-05 review of the package. Model revisions and weights are
   PATH) and says how to get one; a failed download is one `error:` line (`DownloadError`) naming the repo,
   the reason and what to do (`HF_HUB_OFFLINE`, network, `--model-dir`) instead of a traceback; a missing
   `--model-dir` is `error: file not found`. `JEV_STYLE_RELEASE` is checked before argument parsing (one line
-  instead of a traceback; `2B` is accepted for `2b`). `--backend mlx` on a machine that is not Apple silicon
+  instead of a traceback; `2B` is accepted for `2b`; the `guard` hook ignores it and still exits 0). `--backend mlx` on a machine that is not Apple silicon
   says so and points at `[torch]` instead of suggesting the `[mlx]` extra that installs nothing there.
 - **Integrity check from the CLI.** `jev-style download` verifies every file against the repo's
   `manifest.json` (sizes and sha256; `--no-verify` skips it), and `serve` / `decide --verify` pass `verify=True`

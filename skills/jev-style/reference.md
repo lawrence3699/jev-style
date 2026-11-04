@@ -24,8 +24,8 @@ Source and full docs: https://github.com/lawrence3699/jev-style
    "refund":  {"type": "noul", "noul": 0.97},
    "team":    {"type": "choice", "choice": "billing",
                "probabilities": {"billing": 0.91, "tech": 0.06, "sales": 0.03}, "confidence": 0.865},
-   "urgency": {"type": "score", "score": 1.72, "legend": {"0": "can wait", "1": "this week", "2": "today"},
-               "probabilities": {"0": 0.04, "1": 0.20, "2": 0.76}, "confidence": 0.64}},
+   "topic":   {"type": "choice", "choice": "double_charge",
+               "probabilities": {"double_charge": 0.88, "cancellation": 0.03, "other": 0.09}, "confidence": 0.82}},
  "usage": {"input_tokens": 212, "state_tokens": 31, "output_tokens": 0},
  "latency_ms": 61.2, "timing": {"total_ms": 61.2},
  "backend": "mlx"}
