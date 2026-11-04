@@ -254,7 +254,8 @@ def is_loopback(url: str | None) -> bool:
 def implicit_api_key(base_url: str | None) -> str | None:
     """``$JEV_STYLE_API_KEY`` when it may be sent to ``base_url`` without being named explicitly: in-process
     (never sent), a loopback server, or the server ``$JEV_STYLE_URL`` names. For any other URL the caller passes
-    ``api_key=`` (``--key NAME=ENV`` for ``jev-style eval``, ``api_key_env`` for a cascade tier)."""
+    ``api_key=`` (``--key NAME=ENV`` for ``jev-style eval``, ``--api-key-env NAME`` for ``jev-style decide --url``,
+    ``api_key_env`` for a cascade tier)."""
     key = os.environ.get("JEV_STYLE_API_KEY")
     if not key or base_url is None or is_loopback(base_url):
         return key

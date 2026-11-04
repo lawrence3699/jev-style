@@ -196,7 +196,7 @@ out = js.decide({"receipt": "r1", "policy": "Meals over 50 EUR need a manager ap
 print(out["answers"]["approval"]["noul"])
 ```
 
-The client is not tied to this model: `JevStyle(base_url=...)` works with any server that implements `POST /v1/systemone`, and a client written for another systemone-compatible server can call `http://127.0.0.1:8765` with any API key string. `JEV_STYLE_API_KEY` (the key of your local `jev-style serve --api-key-env`, or of the hosted API) is sent only to loopback servers and to the server named in `JEV_STYLE_URL`; for any other server pass `api_key=` (`--key NAME=ENV` for `jev-style eval`, `api_key_env` for a cascade tier), so a key is never sent to a third-party server by accident.
+The client is not tied to this model: `JevStyle(base_url=...)` works with any server that implements `POST /v1/systemone`, and a client written for another systemone-compatible server can call `http://127.0.0.1:8765` with any API key string. `JEV_STYLE_API_KEY` (the key of your local `jev-style serve --api-key-env`, or of the hosted API) is sent only to loopback servers and to the server named in `JEV_STYLE_URL`; for any other server pass `api_key=` (`--key NAME=ENV` for `jev-style eval`, `--api-key-env NAME` for `jev-style decide --url`, `api_key_env` for a cascade tier), so a key is never sent to a third-party server by accident.
 
 ### From the shell
 

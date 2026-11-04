@@ -20,7 +20,7 @@ Fixes from the 2026-11-05 review of the package. Model revisions and weights are
   bodies of both shapes and malformed 200 responses, through a real local stub server.
 - **Guard and MCP server: no key or state to the wrong place.** `JEV_STYLE_API_KEY` is sent only to loopback
   servers and to the server named in `JEV_STYLE_URL`; any other `base_url` (eval `--server`, a cascade http
-  tier, `--url`) needs an explicit key. The MCP server's instructions are built per backend: the served model's
+  tier, `--url`) needs an explicit key (`eval --key`, a tier's `api_key_env`, and the new `decide --api-key-env`). The MCP server's instructions are built per backend: the served model's
   context and per-question budgets come from `GET /v1/models` (the text used to say 25,600 / 2,048 for every
   model), and with `--allow-remote --url` they say that every state goes to that server instead of
   "nothing is sent elsewhere".

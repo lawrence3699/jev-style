@@ -215,11 +215,17 @@ def cmd_decide(args: argparse.Namespace) -> int:
         print(f"error: {conflict}", file=sys.stderr)
         return 2
     url = args.url or os.environ.get("JEV_STYLE_URL")
+    api_key = None
+    if args.api_key_env:                   # an explicit key for --url (needed for any server that is not loopback)
+        api_key = os.environ.get(args.api_key_env, "").strip()
+        if not api_key:
+            print(f"error: environment variable {args.api_key_env} is empty or unset", file=sys.stderr)
+            return 2
     if args.cascade and not args.url:
         js = JevStyle(cascade=args.cascade, backend=args.backend, **_tier_kw(args))
     else:
-        js = JevStyle(base_url=url) if url else JevStyle(backend=args.backend, fake=args.fake,
-                                                         **({} if args.fake else _load_kw(args)))
+        js = JevStyle(base_url=url, api_key=api_key) if url else JevStyle(backend=args.backend, fake=args.fake,
+                                                                          **({} if args.fake else _load_kw(args)))
     try:
         out = js.decide(state, qs)
     except JevStyleError as e:
@@ -321,6 +327,8 @@ def _main(argv: list[str] | None = None) -> int:
     q.add_argument("--choice", action="append", metavar="Q::a,b,c", help="multiple choice (repeatable)")
     q.add_argument("--score", action="append", metavar="Q::low,mid,high", help="ordered scale, lowest first")
     q.add_argument("--url", help="use a running server instead of loading the model ($JEV_STYLE_URL)")
+    q.add_argument("--api-key-env", metavar="NAME", help="send 'Authorization: Bearer <key>' with the key from env NAME "
+                   "($JEV_STYLE_API_KEY goes by itself only to a loopback --url or to $JEV_STYLE_URL)")
     _model_args(q)
     q.set_defaults(func=cmd_decide)
 

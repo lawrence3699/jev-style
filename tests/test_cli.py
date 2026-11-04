@@ -81,3 +81,15 @@ def test_guard_hook_ignores_a_bad_env_release(monkeypatch, capsys):
     assert main(["guard", "--check", "ls"]) == 0                   # a hook: never a non-zero exit for the env
     out = capsys.readouterr()
     assert "ASK" in out.out and "JEV_STYLE_RELEASE" not in out.err
+
+
+def test_decide_url_takes_an_explicit_key(stub_server, monkeypatch, capsys):
+    srv = stub_server(200, {"model": "stub", "answers": {"noul_1": {"type": "noul", "noul": 0.5}}})
+    monkeypatch.delenv("JEV_STYLE_API_KEY", raising=False)
+    monkeypatch.setenv("THEIR_KEY", "theirs")
+    assert main(["decide", "x", "--url", srv.url, "--noul", "a"]) == 0
+    assert "authorization" not in {k.lower() for k in srv.requests[0]["headers"]}      # no key: none sent
+    assert main(["decide", "x", "--url", srv.url, "--noul", "a", "--api-key-env", "THEIR_KEY"]) == 0
+    assert {k.lower(): v for k, v in srv.requests[1]["headers"].items()}["authorization"] == "Bearer theirs"
+    assert main(["decide", "x", "--url", srv.url, "--noul", "a", "--api-key-env", "NOT_SET"]) == 2
+    assert "NOT_SET is empty or unset" in capsys.readouterr().err
