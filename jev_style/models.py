@@ -243,7 +243,7 @@ def require_backend(backend: str | Build) -> None:
     if not problem:
         return
     b = build.backend
-    if b == "mlx" and not is_apple_silicon():
+    if b == "mlx" and not is_apple_silicon() and not has_module("mlx"):   # a version problem is reported as such
         raise MissingBackendError(
             f"the mlx backend of {build.repo} only runs on Apple silicon (the [mlx] extra installs nothing on "
             f"other machines). Use --backend torch: pip install \"jev-style[torch]\" (CUDA, CPU or Apple MPS).")
