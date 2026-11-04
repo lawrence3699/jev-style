@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://jevstyle.com/?utm_source=github&utm_medium=readme&utm_campaign=start_here">Website</a> ·
-  <a href="https://huggingface.co/collections/chaoliangUNSW/jev-style-decision-v4-2b">Models</a> ·
+  <a href="https://huggingface.co/chaoliangUNSW">Models</a> ·
   <a href="https://huggingface.co/spaces/chaoliangUNSW/jev-style-2b">Live demo</a> ·
   <a href="https://pypi.org/project/jev-style/">PyPI</a> ·
   <a href="#agent-skills">Agent skills</a> ·
@@ -23,7 +23,7 @@
 <p align="center">
   <a href="https://pypi.org/project/jev-style/"><img alt="PyPI" src="https://img.shields.io/pypi/v/jev-style?style=for-the-badge&labelColor=000000&color=0a0a0a" height="28"></a>
   <a href="https://github.com/lawrence3699/jev-style/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/lawrence3699/jev-style/ci.yml?style=for-the-badge&labelColor=000000" height="28"></a>
-  <a href="https://huggingface.co/collections/chaoliangUNSW/jev-style-decision-v4-2b"><img alt="Weights: 0.8B · 2B · torch · MLX · GGUF" src="https://img.shields.io/badge/WEIGHTS-0.8B%20%C2%B7%202B%20%C2%B7%20torch%20%C2%B7%20MLX%20%C2%B7%20GGUF-0a0a0a.svg?style=for-the-badge&labelColor=000000" height="28"></a>
+  <a href="https://huggingface.co/chaoliangUNSW"><img alt="Weights: 0.8B · 2B · torch · MLX · GGUF" src="https://img.shields.io/badge/WEIGHTS-0.8B%20%C2%B7%202B%20%C2%B7%20torch%20%C2%B7%20MLX%20%C2%B7%20GGUF-0a0a0a.svg?style=for-the-badge&labelColor=000000" height="28"></a>
   <a href="https://huggingface.co/spaces/chaoliangUNSW/jev-style-2b"><img alt="Demo: 2B v4 on HF Spaces" src="https://img.shields.io/badge/DEMO-2B%20v4%20on%20HF%20Spaces-0a0a0a.svg?style=for-the-badge&labelColor=000000" height="28"></a>
   <a href="https://registry.modelcontextprotocol.io/"><img alt="MCP Registry" src="https://img.shields.io/badge/MCP%20REGISTRY-listed-0a0a0a.svg?style=for-the-badge&labelColor=000000" height="28"></a>
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-0a0a0a.svg?style=for-the-badge&labelColor=000000" height="28"></a>
@@ -33,7 +33,7 @@
 
 <!-- mcp-name: io.github.lawrence3699/jev-style -->
 
-Jev-Style is a family of small decision models (0.8B and 2B, fine-tuned from Qwen3.5) and the toolkit that puts them to work. Give a model text or JSON, optional images and typed questions. It reads the input once and returns a calibrated probability for every option, in one forward pass, on your laptop. Use it to route support tickets, decide when to call a bigger model, check receipts and screenshots, or let a coding agent's tool calls through only when a local model agrees. No GPU, no API key and no training needed.
+Jev-Style is a family of small decision models (0.8B and 2B, fine-tuned from Qwen3.5) and the toolkit that puts them to work. Give a model text or JSON, optional images and typed questions. It reads the input once and returns a calibrated probability for every option, in one forward pass, on your laptop. Use it to route support tickets to the right team, pick the tool or model an agent should call, tag topics, flag phishing, check receipts and screenshots, or let a coding agent's tool calls through only when a local model agrees. No GPU, no API key and no training needed.
 
 ![The Playground answering a support-ticket request, then the agent-approval demo allowing, asking about and denying tool calls](https://raw.githubusercontent.com/lawrence3699/jev-style/main/docs/demo.gif)
 
@@ -41,12 +41,14 @@ Jev-Style is a family of small decision models (0.8B and 2B, fine-tuned from Qwe
 
 Try it first with nothing installed: the [2B Space](https://huggingface.co/spaces/chaoliangUNSW/jev-style-2b) runs Jev-Style-2B-Decision-v4 (text and images) and the [0.8B Space](https://huggingface.co/spaces/chaoliangUNSW/jev-style-v3) runs the 0.8B.
 
-Locally, you need Python 3.10 or newer. Install **one** backend for your machine:
+Locally, you need Python 3.10 or newer. In a virtual environment, install **one** backend for your machine:
 
 ```bash
-pip install -U "jev-style[mlx]"      # Apple silicon
-pip install -U "jev-style[torch]"    # NVIDIA GPU, CPU, or image input (also works on Apple MPS)
+pip install -U "jev-style[mlx]"      # Apple silicon (text)
+pip install -U "jev-style[torch]"    # NVIDIA GPU, CPU or image input; Intel Macs, Linux and Windows (also works on Apple MPS)
 ```
+
+The bare `pip install jev-style` installs only the HTTP client, the fake engine and the MCP server; running a model needs one of the extras above. `[mlx]` pins `mlx-lm` to 0.31.3 on purpose (the 2B MLX runtimes check the mlx-lm source they patch and refuse any other version), so give jev-style its own virtual environment, or use `uv tool install`, if other MLX tools in the same environment need a newer mlx-lm.
 
 Start the server and open [the local Playground](http://127.0.0.1:8765). The first start downloads the 0.8B weights (about 1.5 GB); later starts reuse them.
 
@@ -93,9 +95,9 @@ Start with the default 0.8B to try things: 1.5 GB, fast on a laptop. Move to the
 | [Jev-Style-0.8B-Decision-v3](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3) (`0.8b`, default) | 0.8B · 0.53 GB (Q4_K_M) | 64.1 % | 75.5 % | 25,600 tokens |
 | Hosted Jev 1.13, for reference | – | 86.6 % | 79.3 % | – |
 
-<a href="https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v4"><img alt="Jev-Style-2B-Decision-v4: 44.37 on the Decision Index 0.3 public index (one complete self-run, up from 34.05 for the 2B v3 on the board) and 57.55 on the public Vision index; 32,768 tokens per call, image tokens included." src="https://raw.githubusercontent.com/lawrence3699/jev-style/main/docs/assets/jev-style-2b-v4-banner.png"></a>
+**Decision Index.** Since 2026-11-04 the 2B v4 is listed on the public [Decision Index 0.3 board](https://huggingface.co/spaces/multimodalart/jev-decision-index) as `jev-style-2b-v4`, replacing the 2B v3 entry (34.05): **Public 44.37, Full 34.53, Breadth 41.75**, and on the Vision board **Public 57.55 / Full 51.94**. The 0.8B v3 is on the same board at Public 17.0 / Full 12.5. The Full score also counts the maintainers' private test sets, which is why it is lower than the Public score.
 
-**How to read these numbers.** The 2B v4 JevBench score is one self-run with the official harness through this package's server (float32, Apple MPS; 95 % CI 68.9 to 80.0 %), not an official board entry. On the Decision Index 0.3 public suite it scores 44.37 (one complete self-run with the kit's own runner and scorer, 140,178 requests; v3 on the board: 34.05) and 57.55 on the public Vision suite (12,210 rows); the board's headline Full score comes from the maintainers' private tests, so these are not a board rank. Several benchmarks' official train splits are in its training data, so those results are not zero-shot. The 2B v3 numbers are single pre-declared runs with its GGUF F16 build: on JevBench it is the highest among the Qwen3.5-2B-family systems on the v1.4.1 board (decider-2b 71.0 %, open-jev-zefan-2b 64.5 %), but the lead over decider-2b is inside the 95 % confidence interval, 42 of the 82 board systems score higher, and hosted Jev is well ahead. Each model card gives every protocol: [2B v4](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v4), [2B v3](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3), [0.8B v3](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3#results).
+**How to read the JevBench numbers.** The 2B v4 JevBench score is one self-run with the official harness through this package's server (float32, Apple MPS; 95 % CI 68.9 to 80.0 %), not a JevBench board entry. Several benchmarks' official train splits are in the 2B v4's training data, so those results are not zero-shot. The 2B v3 numbers are single pre-declared runs with its GGUF F16 build: on JevBench it is the highest among the Qwen3.5-2B-family systems on the v1.4.1 board (decider-2b 71.0 %, open-jev-zefan-2b 64.5 %), but the lead over decider-2b is inside the 95 % confidence interval, 42 of the 82 board systems score higher, and hosted Jev is well ahead. Each model card gives every protocol: [2B v4](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v4), [2B v3](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3), [0.8B v3](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3#results).
 
 <details>
 <summary><strong>The 0.8B against Laya, on sets neither was trained on</strong></summary>
@@ -118,22 +120,22 @@ From the [0.8B model card](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-D
 | MLX bf16 / 8-bit: [2B v4](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v4-MLX), [2B v3](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3-MLX), [0.8B](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3-MLX) | 3.76 / 2.00 GB | 3.76 / 2.00 GB | 1.50 / 0.80 GB | `--backend mlx` (Apple silicon; `auto` picks it there) |
 | GGUF F16 / Q8_0 / Q4_K_M: [2B v4](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v4-GGUF), [2B v3](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v3-GGUF), [0.8B](https://huggingface.co/chaoliangUNSW/Jev-Style-0.8B-Decision-v3-GGUF) | 3.78 / 2.01 / 1.27 GB | 3.78 / 2.01 / 1.27 GB | 1.52 / 0.81 / 0.53 GB | `--backend gguf` (llama.cpp through the release's scorer: `jev-score-v2` for both 2Bs, `jev-score` for the 0.8B) |
 
-These are weight-file sizes, not RAM or VRAM requirements. Each build carries its own runtime file next to the weights; the server downloads a pinned revision and uses that file, so the answers match what the model card documents. Stock llama.cpp, Ollama, LM Studio or `mlx_lm.generate` can load the weights but cannot produce the decision scores. The 2B MLX runtimes need mlx-lm 0.31.3 exactly, which `jev-style[mlx]` installs. For long documents on the 2B, use Q8_0 (the default) or F16 rather than Q4_K_M. Earlier 2B generations, for LM Studio or Ollama without this server: [v1 GGUF](https://huggingface.co/chaoliangUNSW/Jev-Style-Qwen3.5-2B-Decision-GGUF) (LM Studio, llama.cpp) and [v2 GGUF](https://huggingface.co/chaoliangUNSW/Jev-Style-Qwen3.5-2B-Decision-v2-GGUF) (Ollama). Every build and demo is in the [v4 collection](https://huggingface.co/collections/chaoliangUNSW/jev-style-decision-v4-2b) and the [v3 collection](https://huggingface.co/collections/chaoliangUNSW/jev-style-decision-v3-08b-2b-6ab87f32380cbd8c03b608b9).
+These are weight-file sizes, not RAM or VRAM requirements. Each build carries its own runtime file next to the weights; the server downloads a pinned revision and uses that file, so the answers match what the model card documents. `jev-style download` refuses to fetch a build the installed backend cannot run (`--no-backend-check` downloads anyway) and checks every file against the repo's `manifest.json` (sizes and sha256; `--no-verify` skips it); `serve --verify` and `decide --verify` run the runtime's own integrity check at load time. Stock llama.cpp, Ollama, LM Studio or `mlx_lm.generate` can load the weights but cannot produce the decision scores. The 2B MLX runtimes need mlx-lm 0.31.3 exactly, which `jev-style[mlx]` installs. For long documents on the 2B, use Q8_0 (the default) or F16 rather than Q4_K_M. Earlier 2B generations, for LM Studio or Ollama without this server: [v1 GGUF](https://huggingface.co/chaoliangUNSW/Jev-Style-Qwen3.5-2B-Decision-GGUF) (LM Studio, llama.cpp) and [v2 GGUF](https://huggingface.co/chaoliangUNSW/Jev-Style-Qwen3.5-2B-Decision-v2-GGUF) (Ollama). Every build and demo is in the [v4 collection](https://huggingface.co/collections/chaoliangUNSW/jev-style-decision-v4-2b) and the [v3 collection](https://huggingface.co/collections/chaoliangUNSW/jev-style-decision-v3-08b-2b-6ab87f32380cbd8c03b608b9).
 
 </details>
 
 ## Where it fits
 
-| | Jev-Style 2B v4 | Jev-Style 0.8B v3 | [Kev](https://github.com/jaredpalmer/kev) (Kev-4B) | [Laya](https://github.com/NandhaKishorM/laya) | Hosted Jev (TypeSafe) |
+| | Jev-Style 2B v4 | Jev-Style 0.8B v3 | [Kev](https://github.com/jaredpalmer/kev) (0.8B to 27B) | [Laya](https://github.com/NandhaKishorM/laya) | Hosted Jev (TypeSafe) |
 |---|---|---|---|---|---|
 | Runs on | your machine: CUDA, Apple silicon (MLX), CPU | same | your machine: CUDA, Apple silicon (MLX) | your machine; a CPU is enough | TypeSafe's cloud |
-| Install | `pip install jev-style` | same | `git clone` + `uv` (not on PyPI) | `pip install laya` | API key |
+| Install | `pip install "jev-style[torch]"` (`[mlx]` on Apple silicon) | same | `git clone` + `uv` (not on PyPI) | `pip install laya` | API key |
 | Images | yes (PyTorch build) | no | text only | text only | yes |
-| Longest input | 32,768 tokens | 25,600 tokens | 65,536 tokens (validated to 8,192) | 8,192 tokens (1,024 by default) | – |
-| Smallest download | 1.27 GB (4-bit, text) | 0.53 GB (4-bit) | 4B base model + adapter | 322M to 421M parameters | – |
+| Longest input | 32,768 tokens | 25,600 tokens | 65,536 tokens (validated to 8,192; Kev-27B to 65,536) | 8,192 tokens (1,024 by default) | – |
+| Smallest download | 1.27 GB (4-bit, text) | 0.53 GB (4-bit) | 0.8B base + adapter (Kev-0.8B) | 322M to 421M parameters | – |
 | JevBench v1.4.1 public (231) | 74.9 % (self-run) | 64.1 % | not reported | 58.4 % (best official checkpoint) | 86.6 % |
 | Languages | 19 trained, 51 evaluated | same | not reported | 100+ (multilingual checkpoint) | – |
-| Train on your own labels | not yet | not yet | yes | yes | no |
+| Train on your own labels | no | no | yes | yes | no |
 | Agent tooling | 6 skills, MCP, Claude Code guard, cascades | same | fine-tune skill, one-command deploy | MCP, LangChain, LlamaIndex, CrewAI extras | SDKs |
 | License | Apache-2.0 | Apache-2.0 | Apache-2.0 | Apache-2.0 | proprietary, hosted |
 
@@ -144,7 +146,7 @@ The other projects' cells come from their READMEs on 2026-11-03; corrections are
 For several questions about one text, and to choose the engine yourself:
 
 ```python
-from jev_style import JevStyle, choice, noul, score
+from jev_style import JevStyle, choice, noul
 
 js = JevStyle.from_pretrained("chaoliangUNSW/Jev-Style-2B-Decision-v4-MLX")      # the 2B v4 in-process; the repo picks the backend
 # js = JevStyle.from_pretrained("chaoliangUNSW/Jev-Style-0.8B-Decision-v3-MLX")  # the 0.8B
@@ -153,13 +155,28 @@ js = JevStyle.from_pretrained("chaoliangUNSW/Jev-Style-2B-Decision-v4-MLX")     
 # js = JevStyle(base_url="http://127.0.0.1:8765")                                # or a running server
 out = js.decide("I was charged twice. Please fix this ASAP.", {
     "billing": noul("This ticket is about billing."),
-    "tone":    choice("What is the customer's tone?", ["calm", "frustrated", "angry"]),
-    "urgency": score("How urgent is this ticket?", ["can wait", "this week", "today"]),
+    "team":    choice("Which team should handle this?", {"billing": "charges, refunds, invoices",
+                                                          "shipping": "delivery, lost parcels", "tech": "bugs, outages"}),
+    "refund":  noul("The customer asks for money back."),
 })
-print(out["answers"]["billing"]["noul"], out["answers"]["tone"]["choice"])
+print(out["answers"]["billing"]["noul"], out["answers"]["team"]["choice"])
 ```
 
-`from_pretrained` takes the main repo (PyTorch), `-MLX` (`precision="8bit"` for the 2.00 GB 2B or 0.80 GB 0.8B weights) or `-GGUF` (`quant="Q4_K_M"`, needs the release's scorer, see [Backends](#backends-and-speed)). The client is not tied to this model: `JevStyle(base_url=...)` works with any server that implements `POST /v1/systemone`.
+The same call covers other routing decisions, for example flagging phishing and tagging the topic of an email, or picking the tool an agent should call:
+
+```python
+email = js.decide(email_text, {
+    "phishing": noul("The message tries to trick the reader into revealing credentials or paying."),
+    "topic":    choice("What is the message mainly about?", ["invoice", "delivery", "account security", "other"]),
+})
+tool = js.decide(user_request, {
+    "tool": choice("Which tool should the agent call?", {"web_search": "fresh facts from the web",
+                                                         "calendar": "dates and meetings",
+                                                         "python": "arithmetic, data, files"}),
+})
+```
+
+`from_pretrained` takes the main repo (PyTorch), `-MLX` (`precision="8bit"` for the 2.00 GB 2B or 0.80 GB 0.8B weights) or `-GGUF` (`quant="Q4_K_M"`, needs the release's scorer, see [Backends](#backends-and-speed)). The client is not tied to this model: `JevStyle(base_url=...)` works with any server that implements `POST /v1/systemone`, including the [hosted API](#hosted-api). `JEV_STYLE_API_KEY` (the key of your local `jev-style serve --api-key-env`, or of the hosted API) is sent only to loopback servers and to the server named in `JEV_STYLE_URL`; for any other server pass `api_key=` (`--key NAME=ENV` for `jev-style eval`, `--api-key-env NAME` for `jev-style decide --url`, `api_key_env` for a cascade tier), so a key is never sent to a third-party server by accident.
 
 Images go in the state by reference, with the image itself under `assets` (2B v4, PyTorch build):
 
@@ -181,6 +198,8 @@ jev-style decide "Refund still missing after 3 weeks" --url http://127.0.0.1:876
 # without --url (or JEV_STYLE_URL) it loads its own copy of the model (add --release 2b for the 2B v4)
 ```
 
+`--api-key-env NAME` sends the key in that environment variable to a `--url` that is not loopback; `--verify` checks the model files against their manifest before an in-process load.
+
 ### The API, by example
 
 With the server running, open http://127.0.0.1:8765 for the Playground and the demos (agent action approval, Snake, Chinese and 51 languages), or send a ticket:
@@ -193,13 +212,11 @@ curl -s localhost:8765/v1/systemone -H 'content-type: application/json' -d '{
                     "criteria": {"returns":  "Exchanges, refunds, wrong or damaged items",
                                  "shipping": "Delivery status, delays, lost packages",
                                  "billing":  "Charges, invoices, payment problems"}},
-    "escalate":    {"type": "noul",  "instructions": "Does this need urgent human attention?"},
-    "frustration": {"type": "score", "instructions": "How frustrated is the customer?",
-                    "criteria": ["Calm", "Frustrated", "Very angry"]}
+    "escalate":    {"type": "noul",  "instructions": "Does this need urgent human attention?"}
   }}'
 ```
 
-The actual response from the 0.8B (the default release) with MLX on an Apple M1 Max, probabilities rounded:
+These two answers are from the actual response of the 0.8B (the default release) with MLX on an Apple M1 Max, probabilities rounded (that run also asked a third question, so its usage and timing fields are left out):
 
 ```json
 {
@@ -207,13 +224,8 @@ The actual response from the 0.8B (the default release) with MLX on an Apple M1 
   "answers": {
     "department":  { "type": "choice", "choice": "billing", "confidence": 0.46,
                      "probabilities": { "returns": 0.07, "shipping": 0.29, "billing": 0.64 } },
-    "escalate":    { "type": "noul", "noul": 0.45 },
-    "frustration": { "type": "score", "score": 1.28, "confidence": 0.36,
-                     "legend": { "0": "Calm", "1": "Frustrated", "2": "Very angry" },
-                     "probabilities": { "0": 0.07, "1": 0.57, "2": 0.35 } }
+    "escalate":    { "type": "noul", "noul": 0.45 }
   },
-  "usage": { "input_tokens": 250, "state_tokens": 25, "output_tokens": 0 },
-  "latency_ms": 194.0,
   "backend": "mlx"
 }
 ```
@@ -248,7 +260,7 @@ In Claude Code you can also install everything as plugins:
 
 ## Claude Code guard
 
-Before Claude Code runs a `Bash`, `Write`, `Edit`, `Read`, `WebFetch` or MCP call, `jev-style guard` sends the call to the local model. It asks whether the call is destructive, exfiltrates data, touches secrets or goes outside the project, plus a 0 to 4 risk score, and turns the answers into **allow / ask / deny**. Regex hard rules in code can only make a verdict stricter. If the server is down, times out or rejects the request, the verdict is **ask**, never a silent allow.
+Before Claude Code runs a `Bash`, `Write`, `Edit`, `Read`, `WebFetch` or MCP call, `jev-style guard` sends the call to the local model. It asks whether the call is destructive, exfiltrates data, touches secrets or goes outside the project, plus a 0 to 4 risk score, and turns the answers into **allow / ask / deny**. Regex hard rules in code can only make a verdict stricter. If the server is down, times out, rejects the request or answers without a usable value for every question, the verdict is **ask**, never a silent allow.
 
 ```bash
 jev-style guard --check "git push --force origin main"
@@ -256,7 +268,7 @@ jev-style guard --check "git push --force origin main"
 jev-style guard-replay --url http://127.0.0.1:8765     # the 49 bundled labelled tool calls
 ```
 
-On the 49 bundled tool calls, written and labelled by hand, the default config agrees with the labels on **77.6 %**. **No call labelled deny was allowed.** 2 of the 16 calls labelled ask were allowed. The model alone, with no hard rules, agrees on 61.2 %. Use it as a second line of defence, not as a sandbox. The [skill](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style-guard/SKILL.md) covers installing, dry runs and tuning.
+On the 49 bundled tool calls, written and labelled by hand, the default config with the 0.8B v3 (the default release; the 2B releases were not measured on this set) agrees with the labels on **77.6 %**. **No call labelled deny was allowed.** 2 of the 16 calls labelled ask were allowed. The model alone, with no hard rules, agrees on 61.2 %. Use it as a second line of defence, not as a sandbox. The [skill](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style-guard/SKILL.md) covers installing, dry runs and tuning.
 
 ## MCP server
 
@@ -264,7 +276,7 @@ On the 49 bundled tool calls, written and labelled by hand, the default config a
 claude mcp add jev-style --scope user -- jev-style mcp       # Claude Code
 ```
 
-`jev-style mcp` is a thin stdio server that forwards to the running `jev-style serve`, so one copy of the model serves every client. It is listed in the [official MCP Registry](https://registry.modelcontextprotocol.io/) as `io.github.lawrence3699/jev-style` (runs as `uvx jev-style mcp`; set `JEV_STYLE_URL` if your server is not on `http://127.0.0.1:8765`). It provides `decide` (several questions about one input), `noul`, `choice`, `score` and `model_info`. Setup for Codex, Cursor and Claude Desktop is in [the skill](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style-mcp/SKILL.md).
+`jev-style mcp` is a thin stdio server that forwards to the running `jev-style serve`, so one copy of the model serves every client. It is listed in the [official MCP Registry](https://registry.modelcontextprotocol.io/) as `io.github.lawrence3699/jev-style` (runs as `uvx jev-style mcp`; set `JEV_STYLE_URL` if your server is not on `http://127.0.0.1:8765`). It provides `decide` (several questions about one input), `noul`, `choice`, `score` and `model_info`. Its instructions to the client give the served model's context budget and say whether the state stays on this machine: with `--allow-remote --url https://...` every state goes to that server, and the instructions say so. Setup for Codex, Cursor and Claude Desktop is in [the skill](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style-mcp/SKILL.md).
 
 ## Evaluate on your own data
 
@@ -364,7 +376,7 @@ Tier targets are `local[:release][:backend]`, `hf:<repo id>`, `jevk5:<repo id or
 | NVIDIA GPU | `jev-style serve --backend torch` (with CUDA graphs, below); `--release 2b --dtype bfloat16` runs the 2B v4 the way it was measured on the Decision Index |
 | CPU only | `jev-style serve --backend torch --device cpu` |
 | Images on a Mac | `jev-style serve --release 2b --backend torch` (automatic selection prefers the text-only MLX build) |
-| llama.cpp | build the release's scorer once with `sh build_jev_score.sh /path/to/llama.cpp` from its GGUF repo (`jev-score` for the 0.8B, `jev-score-v2` for the 2B), then `jev-style serve --backend gguf --scorer /absolute/path/printed/by/the/script --quant Q4_K_M` (add `--release 2b` for the 2B) |
+| llama.cpp | `jev-style download --backend gguf` (add `--release 2b` for the 2B) prints the model folder; build the release's scorer once there with `sh build_jev_score.sh /path/to/llama.cpp` (`jev-score` for the 0.8B, `jev-score-v2` for the 2B), then `jev-style serve --backend gguf --scorer /absolute/path/printed/by/the/script --quant Q4_K_M` (`serve` refuses to start the download while no scorer can be found) |
 | Offline | `jev-style serve --model-dir /path/to/a/downloaded/model/repo` |
 | No model (UI or plumbing work) | `jev-style serve --fake` (deterministic, meaningless answers) |
 
@@ -389,7 +401,11 @@ Under `--cuda-graphs auto` the v3 releases use graphs whenever they run on CUDA 
 | `choice` | `{option: description or null}`, 1 to 255 options | `choice`, `probabilities`, `confidence` |
 | `score` | 2 to 10 levels, lowest first: `"label"` or `{"label", "description"}` | `score` = expected level index, `legend`, `probabilities`, `confidence` |
 
-Choice `confidence = (k · p_max − 1) / (k − 1)` for k options: 0 when the probabilities are uniform, 1 when one option takes all of them. Score `confidence` is TypeSafe's ordinal formula, which also counts how far probability sits from the most likely level m: `max(0, 1 − Σ pᵢ·|i − m| / MAD_unif)`, with `MAD_unif` the same average distance for an even spread. Noul answers carry no confidence. Images follow TypeSafe's API: a string value in `state` names an entry of `assets` (`{"type": "image", "format": "png" | "jpg", "data_base64": ...}`, or a multipart file part), the request carries `TypeSafe-Danger-Zone-Images: true`, and each image is a still PNG or JPEG of 280 to 1,568 px per side; a model that reads text only answers 400 `images_not_supported`. Bodies may be compressed with `Content-Encoding: gzip`, `x-gzip` or `zstd` (the official SDKs compress by default), and the request rules match TypeSafe's API. The other routes are `GET /v1/models`, `GET /healthz` and the Playground at `/`. Errors look like `{"error": {"code", "message", "question"?}}` and use HTTP 400 (`max_tokens_exceeded`, request rules), 413, 415, 422 (`invalid_json`, `invalid_request`, `invalid_question`), 401 (`unauthorized`), 404 or 500. Start the server with `--api-key-env NAME` to require `Authorization: Bearer <key>`. The full reference is [skills/jev-style/reference.md](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style/reference.md).
+Choice `confidence = (k · p_max − 1) / (k − 1)` for k options: 0 when the probabilities are uniform, 1 when one option takes all of them. Score `confidence` is TypeSafe's ordinal formula, which also counts how far probability sits from the most likely level m: `max(0, 1 − Σ pᵢ·|i − m| / MAD_unif)`, with `MAD_unif` the same average distance for an even spread. Noul answers carry no confidence. Images follow TypeSafe's API: a string value in `state` names an entry of `assets` (`{"type": "image", "format": "png" | "jpg", "data_base64": ...}`, or a multipart file part), the request carries `TypeSafe-Danger-Zone-Images: true`, and each image is a still PNG or JPEG of 280 to 1,568 px per side; a model that reads text only answers 400 `images_not_supported`. Bodies may be compressed with `Content-Encoding: gzip`, `x-gzip` or `zstd` (the official SDKs compress by default), and the request rules match TypeSafe's API. The other routes are `GET /v1/models`, `GET /healthz` and the Playground at `/`. Errors look like `{"error": {"code", "message", "question"?}}` and use HTTP 400 (`max_tokens_exceeded`, request rules), 413, 415, 422 (`invalid_json`, `invalid_request`, `invalid_question`), 401 (`unauthorized`), 403 (`forbidden_host`, `forbidden_origin`), 404 or 500. The hosted `api.jevstyle.com` answers with a flat body instead, `{"error": "<code>", "message": "..."}`, and reports over-long input as `413 input_too_large`; the Python client, the guard and the MCP server read both shapes, and `JevStyleError.input_too_long` is true for either code. Start the server with `--api-key-env NAME` to require `Authorization: Bearer <key>`. The local server answers only requests addressed to a loopback name (or the `--host` it binds to) and refuses browser requests from other origins with 403, so a web page on another site cannot use it as its API; `--allow-any-host` switches that off. The full reference is [skills/jev-style/reference.md](https://github.com/lawrence3699/jev-style/blob/main/skills/jev-style/reference.md).
+
+### Hosted API
+
+`https://api.jevstyle.com` (the only documented entry point) serves `jev-style-2b-decision-v4` for text only, with an 8,192-token context and inputs of up to 8,000 tokens. There is currently no fixed per-account quota (no daily or per-minute cap); capacity is shared, so when the server is busy it answers `429` with a `Retry-After` header, and clients should retry after that delay. An input that is too long gets `413 input_too_large` there (the local server answers `400 max_tokens_exceeded`). This Python client works against it with `JevStyle(base_url="https://api.jevstyle.com", api_key=...)`. The hosted API is a separate service from local inference: check the [service status and current limits](https://jevstyle.com/api/#service-status) or the [live health endpoint](https://api.jevstyle.com/healthz) when you need it. A health check is a point-in-time readiness signal, not an end-to-end inference guarantee.
 
 ## How it works
 
@@ -399,33 +415,36 @@ Each release is a fine-tune of a Qwen3.5 base with every weight trained (the 2B 
 
 - **Hosted Jev is more accurate** on every set where its number is published (JevBench public items: 86.6 % against 74.9 % for the 2B v4). Treat these models as small local options, not replacements.
 - **With enough labels, a classic classifier can win.** On the [six-intent BANKING77 comparison](https://jevstyle.com/benchmarks/banking-routing/) (240 fixed test requests), TF–IDF + logistic regression got 229 right and the 0.8B 224, and the acceptance rule chosen on the development split exceeded its error budget on the test split. Jev-Style earns its place when you have no labels, several questions per input, images, long inputs, or need probabilities you can threshold. Measure your own labels, calibration, accepted-request errors and end-to-end latency before replacing an existing route.
-- **Benchmark numbers are self-runs**, not board entries, and several benchmarks' official train splits are in the 2B v4's training data (its card lists them), so those results are not zero-shot.
+- **JevBench numbers are self-runs** with the official harness (the Decision Index numbers are the public board's own), and several benchmarks' official train splits are in the 2B v4's training data (its card lists them), so those results are not zero-shot.
 - **Images need the 2B v4 PyTorch build.** The MLX and GGUF builds hold the language model only. Stock llama.cpp, Ollama, LM Studio and `mlx_lm.generate` cannot produce the decision scores.
 - **Calibration is a temperature.** It cannot reorder confidences. Recipe thresholds are illustrative, the bundled tickets are not a benchmark, and the 2B was trained on a reduced data pool (60M tokens) with no separate budget for the question and its options.
-- **Speed on a Mac is hundreds of milliseconds**, not tens: about 0.15 to 0.2 s for a short request to the 0.8B. The 2B MLX runtimes need mlx-lm 0.31.3 exactly. `cascade-9b` needs about 32 GB of GPU memory.
-- **The guard is a second line of defence**, not a sandbox: 77.6 % agreement on 49 hand-labelled calls, measured on the 0.8B.
+- **Speed on a Mac is hundreds of milliseconds**, not tens: about 0.15 to 0.2 s for a short request to the 0.8B. The 2B MLX runtimes need mlx-lm 0.31.3 exactly, so give jev-style its own environment if other MLX tools need a newer mlx-lm. `cascade-9b` needs about 32 GB of GPU memory.
+- **The hosted API reads text only**, with inputs of up to 8,000 tokens; images and 32,768-token inputs need the 2B v4 running locally.
+- **The guard is a second line of defence**, not a sandbox: 77.6 % agreement on 49 hand-labelled calls, measured with the 0.8B v3; the 2B releases were not measured on that set.
 
 ## Used by and mentioned in
 
-- The [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) blog post on System One Auto cites [Jev-Style's confidence cascade](https://github.com/vllm-project/semantic-router/blob/main/website/blog/2026-10-10-system-one-auto.md) as a public precedent.
-- [eullm](https://github.com/eullm/eullm) runs the 0.8B v3 GGUF as the decision model behind its `auto` model routing.
-- On the Hugging Face Hub, `jev-style` is a registered model library: every Jev-Style model page shows the install snippet under "Use this model" ([huggingface.js #2550](https://github.com/huggingface/huggingface.js/pull/2550)).
-- Listed in [yibie/awesome-jev](https://github.com/yibie/awesome-jev), [heyjunpenn/awesome-jev](https://github.com/heyjunpenn/awesome-jev), [cobanov/awesome-jev](https://github.com/cobanov/awesome-jev) and [AnotiaWang/awesome-decision-models](https://github.com/AnotiaWang/awesome-decision-models), and in the [official MCP Registry](https://registry.modelcontextprotocol.io/).
+- The [vLLM Semantic Router blog post on System One Auto](https://github.com/vllm-project/semantic-router/blob/main/website/blog/2026-10-10-system-one-auto.md) (2026-10-10) cites [Jev-Style's cascade commit](https://github.com/lawrence3699/jev-style/commit/5c8149c26256ff4dc1b1e8693a70935b40f90e75) as a public precedent for confidence cascades.
+- [eullm](https://github.com/eullm/eullm) uses the 0.8B v3 GGUF as the decision model behind its `auto` model routing ([setup and benchmark](https://github.com/eullm/eullm/blob/main/bench/reflexbench/README.md)).
+- On the Hugging Face Hub, `jev-style` is a registered model library: the main (PyTorch) model pages show its install snippet under "Use this model" ([huggingface.js #2550](https://github.com/huggingface/huggingface.js/pull/2550)).
+- Listed in [yibie/awesome-jev](https://github.com/yibie/awesome-jev), [cobanov/awesome-jev](https://github.com/cobanov/awesome-jev) and [AnotiaWang/awesome-decision-models](https://github.com/AnotiaWang/awesome-decision-models), and in the [official MCP Registry](https://registry.modelcontextprotocol.io/).
 
 Using Jev-Style somewhere? [Open a workflow issue](https://github.com/lawrence3699/jev-style/issues/new/choose) and it will be added here.
 
-## Roadmap
+## Roadmap (ideas, no dates)
 
-- [x] 0.8B and 2B releases with pinned PyTorch, MLX and GGUF builds; `pip install jev-style`
+Checked items have shipped; unchecked items are proposals, not commitments.
+
+- [x] 0.8B and 2B releases with pinned PyTorch, MLX and GGUF builds; `pip install "jev-style[torch]"` or `"jev-style[mlx]"`
 - [x] Local server with Playground and demos, Python client, CLI
 - [x] Six agent skills, Claude Code guard, MCP server in the official registry
 - [x] `jev-style eval`, engine comparison with paired bootstrap, confidence cascades, CUDA graphs
 - [x] Images and 32,768-token inputs (2B v4)
-- [ ] Fine-tune a release on your own labelled JSONL, from the same file `jev-style eval` reads
-- [ ] Images in the MLX build
-- [ ] Listings in more local model runners
+- [ ] Proposed: fine-tune a release on your own labelled JSONL, from the same file `jev-style eval` reads
+- [ ] Proposed: images in the MLX build
+- [ ] Proposed: listings in more local model runners
 
-Ideas and requests go in [Issues](https://github.com/lawrence3699/jev-style/issues/new/choose). The dated history is in the [changelog](https://github.com/lawrence3699/jev-style/blob/main/CHANGELOG.md).
+Ideas and requests go in [Discussions](https://github.com/lawrence3699/jev-style/discussions). The dated history is in the [changelog](https://github.com/lawrence3699/jev-style/blob/main/CHANGELOG.md).
 
 ## Repository layout
 
@@ -442,7 +461,7 @@ tests/               pytest suite, runs on the fake engine (no model download)
 
 ## Contributing and development
 
-Share a minimal failure case, ask a usage question, or show a workflow in [GitHub Issues](https://github.com/lawrence3699/jev-style/issues/new/choose); please remove private data and credentials. The [contribution guide](https://github.com/lawrence3699/jev-style/blob/main/CONTRIBUTING.md) has setup, test commands and small starting tasks.
+Share a minimal failure case or show a workflow in [GitHub Issues](https://github.com/lawrence3699/jev-style/issues/new/choose); ask usage questions and discuss ideas in [GitHub Discussions](https://github.com/lawrence3699/jev-style/discussions). Please remove private data and credentials. The [contribution guide](https://github.com/lawrence3699/jev-style/blob/main/CONTRIBUTING.md) has setup, test commands and small starting tasks; report a security problem privately as described in [SECURITY.md](https://github.com/lawrence3699/jev-style/blob/main/SECURITY.md).
 
 ```bash
 git clone https://github.com/lawrence3699/jev-style && cd jev-style
@@ -469,7 +488,7 @@ If Jev-Style is useful in your work, cite the repository (GitHub's "Cite this re
 
 **Identity and training sources.** JevStyle is maintained by **Chaoliang Yan** ([about the project](https://jevstyle.com/about/?utm_source=github&utm_medium=readme&utm_campaign=guides)). It is an independent project with no TypeSafe affiliation or endorsement. **The 2B v4 model was trained in part on soft labels distilled from TypeSafe Jev 1.14 through its public API**, as disclosed in its [model card](https://huggingface.co/chaoliangUNSW/Jev-Style-2B-Decision-v4). The package does not bundle raw teacher-response datasets; that packaging detail does not negate the use of teacher outputs in training. Training sources differ by release; consult each model card.
 
-**Local inference and hosted services are separate.** Local inference runs the downloaded JevStyle weights on your machine and needs no hosted API key, TypeSafe or OpenRouter account, or agent simulation; the [local installation guide](https://jevstyle.com/guides/run-locally/) covers text, images and backend selection. A third-party Jev skill that simulates decisions with an agent or requires TypeSafe/OpenRouter credentials is a different execution path. The hosted API, the Hugging Face demos and the local server are separate services: check the [service status and current limits](https://jevstyle.com/api/#service-status) or the [live health endpoint](https://api.jevstyle.com/healthz) when you need the hosted API. A health check is a point-in-time readiness signal, not an end-to-end inference guarantee. Published benchmark pages, with their scope, protocols and limitations, are at [jevstyle.com/benchmarks](https://jevstyle.com/benchmarks/?utm_source=github&utm_medium=readme&utm_campaign=guides).
+**Local inference and hosted services are separate.** Local inference runs the downloaded JevStyle weights on your machine and needs no hosted API key, TypeSafe or OpenRouter account, or agent simulation; the [local installation guide](https://jevstyle.com/guides/run-locally/) covers text, images and backend selection. A third-party Jev skill that simulates decisions with an agent or requires TypeSafe/OpenRouter credentials is a different execution path. The hosted API, the Hugging Face demos and the local server are separate services: check the [service status and current limits](https://jevstyle.com/api/#service-status) or the [live health endpoint](https://api.jevstyle.com/healthz) when you need the hosted API. A health check is a point-in-time readiness signal, not an end-to-end inference guarantee. The hosted API's model, context, input limit, retry rule and error shapes are under [Hosted API](#hosted-api). Published benchmark pages, with their scope, protocols and limitations, are at [jevstyle.com/benchmarks](https://jevstyle.com/benchmarks/?utm_source=github&utm_medium=readme&utm_campaign=guides).
 
 **Acknowledgements and license.** Code: Apache-2.0 ([LICENSE](https://github.com/lawrence3699/jev-style/blob/main/LICENSE)). The weights are Apache-2.0 fine-tunes of [Qwen3.5-2B](https://huggingface.co/Qwen/Qwen3.5-2B) and [Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B); the NOTICE in each model repository lists the changes. The typed-question convention follows [Laya](https://github.com/NandhaKishorM/laya). `cascade-9b` and `jevk5:` tiers use [JevK5-9B](https://huggingface.co/alibiserikbay/JevK5-9B) by alibiserikbay and its runtime [allebee/jevk5](https://github.com/allebee/jevk5), both Apache-2.0; neither is included in this package. Per its model card, part of JevK5-9B's training labels came from OpenAI's GPT-6 Luna under OpenAI's terms.
 

@@ -5,8 +5,8 @@ type: software
 authors:
   - family-names: Yan
     given-names: Chaoliang
-version: 0.6.3
-date-released: 2026-11-02
+version: 0.6.4
+date-released: 2026-11-05
 license: Apache-2.0
 repository-code: https://github.com/lawrence3699/jev-style
 url: https://jevstyle.com
