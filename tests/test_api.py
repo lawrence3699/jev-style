@@ -82,7 +82,7 @@ def test_models(client):
 
 
 def test_auth():
-    c = TestClient(build_app(fake=True, api_key="sekret"))
+    c = TestClient(build_app(fake=True, api_key="sekret"), base_url="http://127.0.0.1")
     assert c.post("/v1/systemone", json=TICKET).status_code == 401
     ok = c.post("/v1/systemone", json=TICKET, headers={"authorization": "Bearer sekret"})
     assert ok.status_code == 200
@@ -102,3 +102,38 @@ def test_agent_approval_demo(client):
     assert feed["counts"]["items"] > 0
     r = client.post("/api/agent-approval/check", json={"id": feed["items"][0]["id"]}).json()
     assert r["decision"] in ("allow", "ask", "deny")
+
+
+# ----------------------------------------------------------------------------- cross-site requests are refused
+def test_host_and_origin_checks_keep_other_sites_out(client):
+    r = client.post("/v1/systemone", json=TICKET, headers={"host": "attacker.example"})
+    assert r.status_code == 403 and r.json()["error"]["code"] == "forbidden_host"
+    r = client.post("/v1/systemone", content=b'{"state": "s", "questions": {"x": {"type": "noul", "instructions": "a"}}}',
+                    headers={"content-type": "text/plain", "origin": "https://evil.example"})   # no preflight
+    assert r.status_code == 403 and r.json()["error"]["code"] == "forbidden_origin"
+    assert client.get("/healthz", headers={"origin": "null"}).status_code == 403
+    assert client.get("/", headers={"host": "localhost:8765"}).status_code == 200
+    assert client.get("/healthz", headers={"host": "[::1]:8765"}).status_code == 200
+    assert client.post("/v1/systemone", json=TICKET, headers={"origin": "http://127.0.0.1:8765"}).status_code == 200
+    assert client.post("/v1/systemone", json=TICKET, headers={"origin": "http://localhost:3000"}).status_code == 200
+
+
+def test_allowed_hosts_can_be_widened_or_switched_off():
+    c = TestClient(build_app(fake=True, allowed_hosts=None), base_url="http://127.0.0.1")
+    assert c.get("/healthz", headers={"host": "attacker.example", "origin": "https://evil.example"}).status_code == 200
+    c = TestClient(build_app(fake=True, allowed_hosts={"box.lan"}), base_url="http://127.0.0.1")
+    assert c.get("/healthz", headers={"host": "box.lan:8765", "origin": "http://box.lan:8765"}).status_code == 200
+    assert c.get("/healthz", headers={"host": "box.lan:8765", "origin": "https://evil.example"}).status_code == 403
+    assert c.get("/healthz", headers={"host": "other.lan"}).status_code == 403
+    assert c.get("/healthz").status_code == 200                                      # loopback always
+    c = TestClient(build_app(fake=True, allowed_hosts="bound"), base_url="http://127.0.0.1")   # --host 0.0.0.0
+    assert c.get("/healthz", headers={"host": "10.0.0.5:8765"}).status_code == 200
+    assert c.get("/healthz", headers={"host": "10.0.0.5:8765", "origin": "http://10.0.0.5:8765"}).status_code == 200
+    assert c.get("/healthz", headers={"host": "10.0.0.5:8765", "origin": "https://evil.example"}).status_code == 403
+
+
+def test_allowed_hosts_for_the_cli_bind_address():
+    from jev_style.cli import allowed_hosts_for
+    assert allowed_hosts_for("127.0.0.1") == {"127.0.0.1", "localhost", "::1"}
+    assert allowed_hosts_for("box.lan") == {"127.0.0.1", "localhost", "::1", "box.lan"}
+    assert allowed_hosts_for("0.0.0.0") == "bound" and allowed_hosts_for("::") == "bound"

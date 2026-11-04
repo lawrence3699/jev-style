@@ -124,7 +124,7 @@ def test_cascade_9b_end_to_end_in_process(frozen, fake_2b, fake_jevk5, fake_hub)
 
 def test_serve_reports_the_cascade(frozen, fake_2b, fake_jevk5, fake_hub):
     from jev_style.server import build_app
-    c = TestClient(build_app("torch", cascade="cascade-9b"))
+    c = TestClient(build_app("torch", cascade="cascade-9b"), base_url="http://127.0.0.1")
     m = c.get("/v1/models").json()
     assert m["data"][0]["id"] == "jev-style-cascade-9b"
     assert [t["name"] for t in m["data"][0]["tiers"]] == ["2b", "jevk5-9b"]

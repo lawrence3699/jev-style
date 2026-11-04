@@ -14,8 +14,9 @@ Output follows the Claude Code hook protocol (exit code 0, JSON on stdout):
                             "permissionDecisionReason": "..."}}
 
 By default an "allow" verdict prints nothing, so Claude Code's own permission rules still apply
-(set ``emit_allow: true`` to auto-approve instead). If the server is down, times out or rejects
-the request, the verdict is "ask" (``on_error``), never a silent allow.
+(set ``emit_allow: true`` to auto-approve instead). If the server is down, times out, rejects the
+request or answers without a usable value for every question, the verdict is "ask" (``on_error``),
+never a silent allow.
 
 Standard library only; runs on Python 3.9+.
 
@@ -321,8 +322,8 @@ def summarise_arguments_ex(tool_input: Dict[str, Any], cfg: Dict[str, Any], tool
     """Return (arguments as the model will see them, list of shortened field paths).
 
     By default (``max_field_chars`` 0) nothing is shortened: the whole call goes to the server,
-    and a call too big for the 25,600-token context comes back as ``max_tokens_exceeded``,
-    which the guard turns into "ask". If ``max_field_chars`` is set, longer strings are shortened
+    and a call too big for the model's context (25,600 tokens for the 0.8B) comes back as
+    ``max_tokens_exceeded``, which the guard turns into "ask". If ``max_field_chars`` is set, longer strings are shortened
     with a visible marker and ``evaluate`` raises the verdict to at least "ask", because the model
     did not see the whole call. Top-level fields from ``drop_fields`` are removed (Bash's
     ``description`` is the agent's own account of the command and must not talk the guard into
@@ -388,14 +389,29 @@ def answer_value(ans: Dict[str, Any]) -> Optional[float]:
     return None
 
 
-def apply_thresholds(answers: Dict[str, Any], thresholds: Dict[str, Any]) -> Dict[str, Any]:
-    decision, reasons, values = "allow", [], {}
+def apply_thresholds(answers: Dict[str, Any], thresholds: Dict[str, Any],
+                     expected_types: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """-> {decision, reasons, values, missing}. ``missing`` lists the questions with a threshold that got no
+    usable value (no answer, not an object, no number, or, with ``expected_types``, an answer of another type than
+    the question asked); the caller decides what a missing value means (``evaluate``: an error, so "ask")."""
+    decision, reasons, values, missing = "allow", [], {}, []
+    answers = answers if isinstance(answers, dict) else {}
     for qid, th in thresholds.items():
-        ans = answers.get(qid)
-        if not isinstance(ans, dict) or not isinstance(th, dict):
+        if not isinstance(th, dict):
             continue
-        v = answer_value(ans)
+        ans = answers.get(qid)
+        if not isinstance(ans, dict):
+            missing.append(qid)
+            continue
+        if expected_types and qid in expected_types and ans.get("type") != expected_types[qid]:
+            missing.append(qid)
+            continue
+        try:
+            v = answer_value(ans)
+        except (TypeError, ValueError, KeyError):
+            v = None
         if v is None:
+            missing.append(qid)
             continue
         values[qid] = round(v, 4)
         deny, ask = th.get("deny"), th.get("ask")
@@ -410,7 +426,7 @@ def apply_thresholds(answers: Dict[str, Any], thresholds: Dict[str, Any]) -> Dic
         if ORDER[level] > ORDER[decision]:
             decision = level
     reasons.sort(key=lambda r: (-ORDER[r["level"]], -r["value"]))
-    return {"decision": decision, "reasons": reasons, "values": values}
+    return {"decision": decision, "reasons": reasons, "values": values, "missing": missing}
 
 
 def apply_hard_rules(hook_input: Dict[str, Any], rules: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -467,13 +483,33 @@ def http_caller(cfg: Dict[str, Any]) -> Callable[[Dict[str, Any]], Dict[str, Any
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             try:
-                err = json.loads(e.read().decode("utf-8")).get("error", {})
-            except Exception:
-                err = {}
-            raise GuardError(f"server returned {e.code} {err.get('code', '')}: {err.get('message', '')}".strip())
+                err = error_fields(json.loads(e.read().decode("utf-8")))
+            except Exception:  # noqa: BLE001 - not JSON, or not the shape we know: still a clear verdict
+                err = {"code": "", "message": ""}
+            raise GuardError(f"server returned {e.code} {err['code']}: {err['message']}".strip().rstrip(":"))
         except (urllib.error.URLError, OSError, ValueError) as e:
             raise GuardError(f"Jev-Style server unreachable at {url}: {getattr(e, 'reason', e)}")
     return call
+
+
+def error_fields(body: Any) -> Dict[str, str]:
+    """``{"code", "message"}`` of an error body in either shape: nested ``{"error": {"code", "message"}}``
+    (this package's server) or flat ``{"error": "<code>", "message": "..."}`` (the hosted api.jevstyle.com);
+    ``{"error": "<message>"}`` is a message without a code. Never raises on a strange body."""
+    out = {"code": "", "message": ""}
+    if not isinstance(body, dict):
+        return out
+    err = body.get("error")
+    if isinstance(err, dict):
+        out["code"], out["message"] = str(err.get("code") or ""), str(err.get("message") or "")
+    elif isinstance(err, str):
+        if "message" in body:
+            out["code"], out["message"] = err, str(body.get("message") or "")
+        else:
+            out["message"] = err
+    elif isinstance(body.get("message"), str):
+        out["message"] = body["message"]
+    return out
 
 
 # ---------------------------------------------------------------------------------------------
@@ -497,8 +533,16 @@ def evaluate(hook_input: Dict[str, Any], cfg: Dict[str, Any], call: Optional[Cal
     try:
         caller = call or http_caller(cfg)
         state = build_state(hook_input, cfg, home=home)
-        resp = caller({"model": "jev-style-0.8b-decision-v3", "state": state, "questions": build_questions()})
-        verdict = apply_thresholds(resp.get("answers") or {}, cfg.get("thresholds") or {})
+        questions = build_questions()
+        resp = caller({"state": state, "questions": questions})
+        if not isinstance(resp, dict):
+            raise GuardError(f"server answered with {type(resp).__name__}, not a JSON object")
+        verdict = apply_thresholds(resp.get("answers") or {}, cfg.get("thresholds") or {},
+                                   expected_types={q: spec["type"] for q, spec in questions.items()})
+        missing = verdict.pop("missing")
+        if missing:  # a 200 without a usable answer to every question is an error, not an allow
+            raise GuardError("server answered without a usable value for " + ", ".join(missing)
+                             + " (wrong server, version or response shape?)")
         out.update(verdict)
         out["model"] = resp.get("model")
         out["input_tokens"] = (resp.get("usage") or {}).get("input_tokens")
@@ -643,7 +687,7 @@ def explain(res: Dict[str, Any]) -> str:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    ap = argparse.ArgumentParser(description="Jev-Style PreToolUse guard for Claude Code")
+    ap = argparse.ArgumentParser(prog="jev-style guard", description="Jev-Style PreToolUse guard for Claude Code")
     ap.add_argument("--config", help="config file (default: $JEV_STYLE_GUARD_CONFIG, ~/.config/jev-style/guard_config.json, else bundled)")
     ap.add_argument("--dry-run", action="store_true", help="log the verdict but print no decision")
     ap.add_argument("--explain", action="store_true", help="read hook JSON on stdin and print the verdict")

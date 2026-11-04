@@ -1,6 +1,6 @@
 # Contributing to Jev-Style
 
-Useful contributions include a reproducible failure case, a working integration, clearer setup instructions, and evaluations on data you can share. Open an [issue](https://github.com/lawrence3699/jev-style/issues/new/choose) before a large change so we can agree on scope.
+Useful contributions include a reproducible failure case, a working integration, clearer setup instructions, and evaluations on data you can share. Open an [issue](https://github.com/lawrence3699/jev-style/issues/new/choose) before a large change so we can agree on scope; usage questions and ideas go to [Discussions](https://github.com/lawrence3699/jev-style/discussions), and security problems to the private channel in [SECURITY.md](SECURITY.md). Everyone taking part is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Report a problem or share a workflow
 

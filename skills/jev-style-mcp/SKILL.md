@@ -21,15 +21,14 @@ non-loopback URLs unless `--allow-remote` is given.
 
 ```sh
 command -v jev-style || echo "install first (jev-style-serve skill)"
-jev-style mcp --help >/dev/null && echo "mcp extra ok"
+jev-style mcp --help >/dev/null && echo "mcp ok"
 curl -s http://127.0.0.1:8765/healthz || echo "server not running"
 ```
 
-If `jev-style mcp --help` fails with "needs the 'mcp' extra", reinstall with the extra:
-`uv tool install --force "jev-style[all]"`.
-If the server is not running, start it (`jev-style serve`, see the `jev-style-serve` skill). Without a
-server you can use `jev-style mcp --model` (loads the model inside the MCP process; each client then
-holds its own copy) - prefer the shared server.
+The MCP server is part of every jev-style install (since 0.3.0; no extra needed). If the server is not
+running, start it (`jev-style serve`, or `jev-style serve --release 2b` for the 2B v4; see the
+`jev-style-serve` skill). Without a server you can use `jev-style mcp --model [--release 2b]` (loads the
+model inside the MCP process; each client then holds its own copy) - prefer the shared server.
 
 ## 2. Register it
 
@@ -59,13 +58,17 @@ args = ["mcp"]
 
 Merge into existing JSON; never overwrite the user's other servers. Server on another port:
 `"args": ["mcp", "--url", "http://127.0.0.1:8766"]`. Server with a key: add
-`"env": {"JEV_STYLE_API_KEY": "..."}` (ask the user for the value; do not invent one).
+`"env": {"JEV_STYLE_API_KEY": "..."}` (ask the user for the value; do not invent one). A server on another
+machine needs `--allow-remote --url http://...`: every state then leaves this machine, and the MCP server's
+instructions tell the client so; only do this if the user asks for it.
 
 ## 3. Verify
 
-Restart or reload the client, then call `model_info` - expect `jev-style-0.8b-decision-v3`. Then a real
-call, e.g. `choice(state="I was charged twice", question="Which team?", options=["billing","tech","sales"])`
-should pick `billing`. If `model_info` says `jev-style-fake`, the server runs the fake engine.
+Restart or reload the client, then call `model_info` - expect an `id` starting with `jev-style-`
+(`jev-style-0.8b-decision-v3` for the default release, `jev-style-2b-decision-v4` for the 2B) with its
+`context_tokens`. Then a real call, e.g. `choice(state="I was charged twice", question="Which team?",
+options=["billing","tech","sales"])` should pick `billing`. If `model_info` says `jev-style-fake`, the
+server runs the fake engine.
 
 Without a client, the same check from the shell:
 

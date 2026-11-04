@@ -321,3 +321,133 @@ def test_download_skips_a_partly_cached_snapshot(monkeypatch, tmp_path):
     models.download(build=build, quant="F16")
     assert calls == [True, False]                                    # incomplete -> network download
     assert not models.cached_complete(tmp_path / "missing", ["*"])
+
+
+# ----------------------------------------------------------------------------- 0.6.4: custom repos, checks before downloads
+def test_custom_repo_patterns_are_not_the_0_8b_file_names():
+    from jev_style.models import patterns_for
+    gguf = build_for_repo("someone/My-2B-Fork-GGUF", trust_remote_code=True)
+    pats = patterns_for(gguf, quant="Q4_K_M")
+    assert pats[-1] == "*-Q4_K_M.gguf" and not any("0.8B" in p for p in pats)
+    assert {"*.py", "*.cpp", "*.sh", "tokenizer/*"} <= set(pats) and gguf.extra["scorer_bin"] is None
+    torch = build_for_repo("someone/My-2B-Fork", trust_remote_code=True)
+    assert {"*.safetensors", "*.json", "*.py", "src/**"} <= set(patterns_for(torch))
+    assert "model.safetensors" not in torch.patterns
+    mlx = build_for_repo("someone/My-2B-Fork-MLX", trust_remote_code=True)
+    assert patterns_for(mlx, precision="8bit")[-1] == "8bit/*" and "*.py" in mlx.patterns
+    for b in (gguf, torch, mlx):
+        assert (b.release, b.revision) == ("custom", None)
+
+
+def test_download_refuses_a_backend_that_cannot_run(monkeypatch):
+    monkeypatch.setattr(models, "has_module", lambda name: False)
+    monkeypatch.setattr(models, "is_apple_silicon", lambda: False)
+    import huggingface_hub
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", lambda *a, **k: pytest.fail("downloaded first"))
+    with pytest.raises(models.MissingBackendError, match=r"jev-style\[torch\]"):
+        models.download("torch")
+    with pytest.raises(models.MissingBackendError, match="Apple silicon"):
+        models.require_backend(RELEASES["0.8b-v3"].builds["mlx"])
+    monkeypatch.setattr(models, "is_apple_silicon", lambda: True)
+    with pytest.raises(models.MissingBackendError, match=r"jev-style\[mlx\]"):
+        models.require_backend(RELEASES["2b-v4"].builds["mlx"])
+
+
+def test_gguf_refuses_before_downloading_when_no_scorer_can_be_found(monkeypatch, tmp_path):
+    import huggingface_hub
+    monkeypatch.setattr(huggingface_hub, "snapshot_download",
+                        lambda *a, local_files_only=False, **k: (_ for _ in ()).throw(FileNotFoundError("no cache"))
+                        if local_files_only else pytest.fail("downloaded before the scorer check"))
+    monkeypatch.delenv("JEV_SCORE_BIN", raising=False)
+    monkeypatch.delenv("JEV_SCORE_V2_BIN", raising=False)
+    import shutil
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    with pytest.raises(models.MissingScorerError) as ei:
+        models.load_release("gguf")
+    msg = str(ei.value)
+    assert "jev-score scorer" in msg and "jev-style download --backend gguf --release 0.8b-v3" in msg
+    with pytest.raises(models.MissingScorerError, match="jev-score-v2"):
+        models.load_release("gguf", release="2b")
+    # any of the usual places satisfies the check, so the download goes ahead
+    monkeypatch.setattr(models, "download", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("download reached")))
+    with pytest.raises(RuntimeError, match="download reached"):
+        models.load_release("gguf", scorer="/opt/jev-score")
+    monkeypatch.setenv("JEV_SCORE_V2_BIN", "/opt/jev-score-v2")
+    with pytest.raises(RuntimeError, match="download reached"):
+        models.load_release("gguf", release="2b-v4")
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/local/bin/" + name)
+    with pytest.raises(RuntimeError, match="download reached"):
+        models.load_release("gguf")
+    # a scorer built inside a cached snapshot (build/jev-score) counts too
+    folder = tmp_path / "snap"
+    (folder / "build").mkdir(parents=True)
+    (folder / "build" / "jev-score").write_bytes(b"\x7fELF")
+    assert models.find_scorer(RELEASES["0.8b-v3"].builds["gguf"], folder=folder) == str(folder / "build" / "jev-score")
+
+
+def test_download_failures_name_the_repo_and_what_to_do(monkeypatch):
+    import huggingface_hub
+
+    def fail(repo_id, *a, local_files_only=False, **k):
+        raise (FileNotFoundError if local_files_only else OSError)("Cannot reach https://huggingface.co")
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", fail)
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    with pytest.raises(models.DownloadError) as ei:
+        models.download(build=RELEASES["0.8b-v3"].builds["gguf"])
+    assert str(ei.value).startswith("could not download chaoliangUNSW/Jev-Style-0.8B-Decision-v3-GGUF (revision b8356a83")
+    assert "OSError: Cannot reach" in str(ei.value) and "--model-dir" in str(ei.value)
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    with pytest.raises(models.DownloadError, match="HF_HUB_OFFLINE is set"):
+        models.download(build=RELEASES["0.8b-v3"].builds["gguf"])
+
+
+def _manifest_folder(tmp_path, bad=False):
+    import hashlib
+    import json
+    folder = tmp_path / "model"
+    folder.mkdir(parents=True)
+    (folder / "jev_style_decision_gguf.py").write_text("# runtime\n")
+    (folder / "Jev-Style-0.8B-Decision-v3-Q8_0.gguf").write_bytes(b"\x00weights" * 50)
+    files = {}
+    for p in folder.iterdir():
+        files[p.name] = {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "bytes": p.stat().st_size}
+    if bad:                                              # same size, other bytes: only the hash can tell
+        (folder / "Jev-Style-0.8B-Decision-v3-Q8_0.gguf").write_bytes(b"\x00tampere" * 50)
+    (folder / "manifest.json").write_text(json.dumps({"format": "jev-style-manifest-v1", "files": files}))
+    return folder
+
+
+def test_verify_folder_checks_sizes_and_hashes(tmp_path, monkeypatch):
+    ok = _manifest_folder(tmp_path / "ok")
+    assert set(models.verify_folder(ok)) == {"jev_style_decision_gguf.py", "Jev-Style-0.8B-Decision-v3-Q8_0.gguf"}
+    assert models.verify_folder(ok, ["*.gguf"]) == ["Jev-Style-0.8B-Decision-v3-Q8_0.gguf"]
+    with pytest.raises(models.VerifyError, match="does not match"):
+        models.verify_folder(_manifest_folder(tmp_path / "bad", bad=True))
+    (ok / "jev_style_decision_gguf.py").write_text("# runtime, longer\n")
+    with pytest.raises(models.VerifyError, match="the manifest says"):
+        models.verify_folder(ok)
+    (ok / "jev_style_decision_gguf.py").unlink()
+    with pytest.raises(models.VerifyError, match="is missing"):
+        models.verify_folder(ok)
+    with pytest.raises(models.VerifyError, match="no manifest.json"):
+        models.verify_folder(tmp_path)
+    # download(verify=True) runs it on what the Hub returned
+    import huggingface_hub
+    good = _manifest_folder(tmp_path / "hub")
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", lambda *a, **k: str(good))
+    build = RELEASES["0.8b-v3"].builds["gguf"]
+    assert models.download(build=build, quant="Q8_0", verify=True) == good
+    tampered = _manifest_folder(tmp_path / "hub2", bad=True)
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", lambda *a, **k: str(tampered))
+    with pytest.raises(models.VerifyError):
+        models.download(build=build, quant="Q8_0", verify=True)
+
+
+def test_env_release_problem(monkeypatch):
+    monkeypatch.delenv("JEV_STYLE_RELEASE", raising=False)
+    assert models.env_release_problem() is None and models.env_release() == DEFAULT_RELEASE
+    monkeypatch.setenv("JEV_STYLE_RELEASE", "2B")
+    assert models.env_release_problem() is None and models.env_release() == "2b"
+    monkeypatch.setenv("JEV_STYLE_RELEASE", "9b")
+    assert "JEV_STYLE_RELEASE='9b'" in models.env_release_problem()
+    assert models.env_release() == DEFAULT_RELEASE

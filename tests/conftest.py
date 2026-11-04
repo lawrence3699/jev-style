@@ -19,7 +19,7 @@ def app():
 
 @pytest.fixture()
 def client(app):
-    return TestClient(app)
+    return TestClient(app, base_url="http://127.0.0.1")
 
 
 # ----------------------------------------------------------------------------- a fake jevk5 package (no torch, no GPU)
@@ -125,3 +125,57 @@ def fake_hub(monkeypatch, tmp_path):
     hub = FakeHub(make_jevk5_folder(tmp_path / "hub-snapshot"))
     monkeypatch.setattr(huggingface_hub, "snapshot_download", hub)
     return hub
+
+
+# ----------------------------------------------------------------------------- a tiny HTTP stub (any status / body)
+class StubServer:
+    """A real local HTTP server for the stdlib-based clients (guard, MCP): answers every request with
+    ``status`` and ``body`` (JSON, or raw bytes) and records what it received."""
+
+    def __init__(self, status: int = 200, body=None, headers: dict | None = None):
+        import http.server
+        self.status, self.body, self.extra_headers, self.requests = status, body, headers or {}, []
+        stub = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def _answer(self):
+                n = int(self.headers.get("content-length") or 0)
+                raw = self.rfile.read(n) if n else b""
+                stub.requests.append({"method": self.command, "path": self.path, "headers": dict(self.headers),
+                                      "body": raw})
+                data = stub.body if isinstance(stub.body, bytes) else json.dumps(stub.body).encode()
+                self.send_response(stub.status)
+                self.send_header("content-type", "application/json")
+                for k, v in stub.extra_headers.items():
+                    self.send_header(k, v)
+                self.send_header("content-length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            do_GET = do_POST = _answer
+
+            def log_message(self, *a):  # quiet
+                pass
+
+        self._srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self._srv.server_address[1]}"
+        self._thread = threading.Thread(target=self._srv.serve_forever, daemon=True)
+        self._thread.start()
+
+    def close(self):
+        self._srv.shutdown()
+        self._srv.server_close()
+
+
+@pytest.fixture()
+def stub_server():
+    """``stub_server(status, body)`` -> StubServer (closed after the test)."""
+    made = []
+
+    def make(status=200, body=None, headers=None):
+        s = StubServer(status, body, headers)
+        made.append(s)
+        return s
+    yield make
+    for s in made:
+        s.close()

@@ -1,6 +1,6 @@
 ---
 name: jev-style-guard
-description: Install the Jev-Style guard, a Claude Code PreToolUse hook that has a local decision model check every Bash, Write, Edit, Read, WebFetch and MCP tool call for destructive actions, data exfiltration, secrets access and out-of-project paths, and answers allow / ask / deny. Use when the user wants a local safety net or approval gate for Claude Code (or another agent with PreToolUse-style hooks), wants to block rm -rf / force-push / key exfiltration, or wants to tune or measure such a guard.
+description: Install the Jev-Style guard, a Claude Code PreToolUse hook that has a local decision model check every Bash, Write, Edit, Read, WebFetch and MCP tool call for destructive actions, data exfiltration, secrets access and out-of-project paths, and answers allow / ask / deny. Use when the user wants a local safety net or approval gate for Claude Code (or another agent with PreToolUse-style hooks), wants to block recursive deletes, force-pushes or key exfiltration, or wants to tune or measure such a guard.
 ---
 
 # Jev-Style guard for Claude Code
@@ -11,13 +11,15 @@ yes/no questions (`destructive`, `exfiltration`, `outside_project`, `secrets`) a
 Thresholds turn answers into allow / ask / deny; regex `hard_rules` in code can only make a verdict
 stricter. The strictest verdict wins.
 
-Safety properties to tell the user: failures (server down, timeout, bad input, broken config) give
-**ask**, never a silent allow; the hook always exits 0; by default an "allow" prints nothing, so Claude
-Code's own permission rules still apply; nothing leaves the machine (the server must be loopback).
+Safety properties to tell the user: failures (server down, timeout, an HTTP error, a 200 without a usable
+value for every question, bad input, broken config) give **ask**, never a silent allow; the hook always
+exits 0; by default an "allow" prints nothing, so Claude Code's own permission rules still apply; nothing
+leaves the machine (the server must be loopback).
 
-Measured on the 49 bundled hand-labelled tool calls (Jev-Style-0.8B-Decision-v3, default config):
-77.6 % agreement with the labels; no call labelled deny was allowed; 2 of 16 calls labelled ask were
-allowed. It is a second line of defence, not a sandbox. Projects under `/tmp` or other system folders get
+Measured on the 49 bundled hand-labelled tool calls with Jev-Style-0.8B-Decision-v3 (the default release)
+and the default config; the 2B releases were not measured on this set: 77.6 % agreement with the labels;
+no call labelled deny was allowed; 2 of 16 calls labelled ask were allowed. It is a second line of defence,
+not a sandbox. Projects under `/tmp` or other system folders get
 more "ask" verdicts (the model reads them as outside a normal project); under the home folder,
 routine commands (`ls`, `git status`, `npm test`, `pytest`, reading files) are allowed.
 

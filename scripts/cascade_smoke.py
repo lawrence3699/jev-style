@@ -57,7 +57,7 @@ def main() -> int:
               "tiers": [{"name": "small", "model_id": "jev-style-fake", "target": "fake"},
                         {"name": "big", "model_id": "fake-jevk5", "target": url, "protocol": "jevk5"}],
               "thresholds": [args.threshold]}
-    client = TestClient(create_app(CascadeAdapter.from_config(config)))
+    client = TestClient(create_app(CascadeAdapter.from_config(config)), base_url="http://127.0.0.1")
     body = {"state": "Shoes arrived two weeks late and in the wrong size. Also I see two charges on my card.",
             "questions": {
                 "department": {"type": "choice", "instructions": "Which team should handle this?",
