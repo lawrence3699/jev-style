@@ -3,7 +3,7 @@
 Versions follow [semantic versioning](https://semver.org/). Each release pins the model revisions it loads
 (`jev_style/models.py`), so upgrading the package is what changes the weights you get.
 
-## 0.6.4 (unreleased)
+## 0.6.4 (2026-11-05)
 
 Fixes from the 2026-11-05 review of the package. Model revisions and weights are unchanged from 0.6.0.
 
