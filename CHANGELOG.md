@@ -7,6 +7,12 @@ Versions follow [semantic versioning](https://semver.org/). Each release pins th
 
 Fixes from the 2026-11-05 review of the package. Model revisions and weights are unchanged from 0.6.0.
 
+- **Skills and listings.** The `jev-style-serve` skill no longer suggests piping an install script into `sh`; it
+  points to `brew install uv` / `pipx install uv` (skill scanners graded the old line as a supply-chain risk). The
+  guard skill's description says "recursive deletes, force-pushes or key exfiltration" instead of literal commands.
+  Both plugin manifests name https://jevstyle.com/ as their homepage. `context7.json` and `glama.json` describe the
+  repository for Context7 and the Glama MCP directory; neither is part of the package.
+
 - **Error bodies of both shapes.** The hosted `api.jevstyle.com` answers `{"error": "<code>", "message": "..."}`
   and reports over-long input as `413 input_too_large`, while this package's server answers the nested
   `{"error": {"code", "message"}}` and `400 max_tokens_exceeded`. The Python client (`parse_error_body`), the

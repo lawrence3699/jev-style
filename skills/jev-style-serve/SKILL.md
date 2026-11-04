@@ -33,8 +33,9 @@ uv tool install "jev-style[mlx]"
 uv tool install "jev-style[torch]"
 ```
 
-The MCP server is part of every install. The bare `pip install jev-style` is only the client. No `uv`? Install
-it (`curl -LsSf https://astral.sh/uv/install.sh | sh`, ask first) or use `pip install "jev-style[mlx]"` /
+The MCP server is part of every install. The bare `pip install jev-style` is only the client. No `uv`? Ask first,
+then install it with a package manager (`brew install uv` or `pipx install uv`; other options:
+https://docs.astral.sh/uv/getting-started/installation/), or use `pip install "jev-style[mlx]"` /
 `"jev-style[torch]"` inside a venv of its own (`[mlx]` pins mlx-lm to 0.31.3, which the 2B MLX runtimes require).
 Needs Python 3.10+. Native Windows runs the PyTorch backend; the Claude Code hook commands are POSIX shell, so
 the guard needs Git Bash or WSL there.

@@ -1,6 +1,6 @@
 ---
 name: jev-style-guard
-description: Install the Jev-Style guard, a Claude Code PreToolUse hook that has a local decision model check every Bash, Write, Edit, Read, WebFetch and MCP tool call for destructive actions, data exfiltration, secrets access and out-of-project paths, and answers allow / ask / deny. Use when the user wants a local safety net or approval gate for Claude Code (or another agent with PreToolUse-style hooks), wants to block rm -rf / force-push / key exfiltration, or wants to tune or measure such a guard.
+description: Install the Jev-Style guard, a Claude Code PreToolUse hook that has a local decision model check every Bash, Write, Edit, Read, WebFetch and MCP tool call for destructive actions, data exfiltration, secrets access and out-of-project paths, and answers allow / ask / deny. Use when the user wants a local safety net or approval gate for Claude Code (or another agent with PreToolUse-style hooks), wants to block recursive deletes, force-pushes or key exfiltration, or wants to tune or measure such a guard.
 ---
 
 # Jev-Style guard for Claude Code
